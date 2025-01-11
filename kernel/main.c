@@ -1,16 +1,14 @@
-#include "types.h"
-#include "param.h"
-#include "memlayout.h"
-#include "riscv.h"
 #include "defs.h"
+#include "memlayout.h"
+#include "param.h"
+#include "riscv.h"
+#include "types.h"
 
 volatile static int started = 0;
 
 // start() jumps here in supervisor mode on all CPUs.
-void main()
-{
-  if (cpuid() == 0)
-  {
+int main() {
+  if (cpuid() == 0) {
     consoleinit();
     printfinit();
     printf("\n");
@@ -31,9 +29,7 @@ void main()
     userinit();         // first user process
     __sync_synchronize();
     started = 1;
-  }
-  else
-  {
+  } else {
     while (started == 0)
       ;
     __sync_synchronize();

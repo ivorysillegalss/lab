@@ -1,0 +1,57 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/riscv64-unknown-elf-gcc",
+      "-Wall",
+      "-Werror",
+      "-O",
+      "-fno-omit-frame-pointer",
+      "-ggdb",
+      "-DSOL_UTIL",
+      "-DLAB_UTIL",
+      "-mcmodel=medany",
+      "-ffreestanding",
+      "-fno-common",
+      "-mno-relax",
+      "-I.",
+      "-fno-stack-protector",
+      "-fno-pie",
+      "-c",
+      "-o",
+      "kernel/string.o",
+      "kernel/string.c"
+    ],
+    "directory": "/home/chenz/xv6-labs-2021",
+    "file": "/home/chenz/xv6-labs-2021/kernel/string.c",
+    "output": "/home/chenz/xv6-labs-2021/kernel/string.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/riscv64-unknown-elf-gcc",
+      "/usr/bin/riscv64-linux-gnu-gcc",
+      "-Wall",
+      "-Werror",
+      "-O",
+      "-fno-omit-frame-pointer",
+      "-ggdb",
+      "-DSOL_UTIL",
+      "-DLAB_UTIL",
+      "-mcmodel=medany",
+      "-ffreestanding",
+      "-fno-common",
+      "-mno-relax",
+      "-I.",
+      "-fno-stack-protector",
+      "-fno-pie",
+      "-c",
+      "-o",
+      "kernel/main.o",
+      "kernel/main.c",
+      "kernel/entry.o",
+      "kernel/entry.c"
+    ],
+    "directory": "/home/chenz/xv6-labs-2021",
+    "file": "/home/chenz/xv6-labs-2021/kernel/main.c",
+    "output": "/home/chenz/xv6-labs-2021/kernel/main.o"
+  }
+]
