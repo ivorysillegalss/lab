@@ -18,6 +18,8 @@
       "-fno-pie",
       "-c",
       "-o",
+      "kernel/main.o",
+      "kernel/main.c",
       "kernel/string.o",
       "kernel/string.c"
     ],
