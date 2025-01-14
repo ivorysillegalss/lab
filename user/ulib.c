@@ -18,6 +18,20 @@ int strcmp(const char* p, const char* q) {
   return (uchar)*p - (uchar)*q;
 }
 
+char* strcat(char* s, const char* t) {
+    char* os = s; // 保存 s 的起始地址
+
+    // 找到 s 的末尾
+    while (*s)
+        s++;
+
+    // 将 t 的内容拷贝到 s 的末尾
+    while ((*s++ = *t++) != 0)
+        ;
+
+    return os; // 返回拼接后的字符串
+}
+
 uint strlen(const char* s) {
   int n;
 
