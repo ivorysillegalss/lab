@@ -18,15 +18,6 @@ int strcmp(const char* p, const char* q) {
     return (uchar)*p - (uchar)*q;
 }
 
-int strcontain(const char* p, const char* q) {
-    while (*p) {                // 遍历字符串 p 的每个字符
-        if (strcmp(p, q) == 0)  // 使用 strcmp 比较 p 的当前子串和 q
-            return 1;           // 如果相等，则 q 是 p 的子串
-        p++;                    // 移动到 p 的下一个位置
-    }
-    return 0;  // 如果遍历完未找到，返回 0
-}
-
 char* strcat(char* s, const char* t) {
     char* os = s;  // 保存 s 的起始地址
 
