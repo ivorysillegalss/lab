@@ -56,15 +56,10 @@ int main(int argc, char* argv[]) {
         } else if (c == '\n') {
             *p = '\0';
             // 组装运行参数
-
-            // char dcmd[512];
-            // strcpy(dcmd, buf);
-            // cmd[i++] = *dcmd;
+            cmd[cmd_args] = buf;
+            cmd[cmd_args + 1] = 0;
 
             // 执行
-            // xargs(func, cmd);
-            cmd[cmd_args++] = buf;
-            cmd[cmd_args] = 0;
             xargs(func, cmd);
 
             // 恢复现场
@@ -72,10 +67,11 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // 处理最后一行
     if (p != buf) {
         *p = '\0';
-        cmd[cmd_args++] = buf;
-        cmd[cmd_args] = 0;
+        cmd[cmd_args] = buf;
+        cmd[cmd_args + 1] = 0;
         xargs(func, cmd);
     }
 
