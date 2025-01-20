@@ -107,6 +107,7 @@ void syscall(void) {
     int num;
     struct proc* p = myproc();
 
+    // a7寄存器保存系统调用的编号 a0保存返回值与调用的函数
     num = p->trapframe->a7;
     if (num > 0 && num < NELEM(syscalls) && syscalls[num]) {
         p->trapframe->a0 = syscalls[num]();

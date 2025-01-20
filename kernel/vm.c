@@ -186,14 +186,21 @@ pagetable_t uvmcreate() {
 // Load the user initcode into address 0 of pagetable,
 // for the very first process.
 // sz must be less than a page.
+// ------------------ .
+// 某个进程 分配对应的初始化代码
+// 形参分别为 须分配的页表 需分配的代码 分配的代码段大小
 void uvminit(pagetable_t pagetable, uchar* src, uint sz) {
     char* mem;
 
+    // 代码段超过页大小 返回失败
     if (sz >= PGSIZE)
         panic("inituvm: more than a page");
+    // 获取物理页 分配空间
     mem = kalloc();
     memset(mem, 0, PGSIZE);
+    // 为页设置权限
     mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_W | PTE_R | PTE_X | PTE_U);
+    // 初始化代码复制到 分配好的页当中
     memmove(mem, src, sz);
 }
 
