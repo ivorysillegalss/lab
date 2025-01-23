@@ -13,6 +13,7 @@ void freerange(void* pa_start, void* pa_end);
 
 extern char end[];  // first address after kernel.
                     // defined by kernel.ld.
+uint64 freemem = 0;
 
 struct run {
     struct run* next;
@@ -53,6 +54,8 @@ void kfree(void* pa) {
     acquire(&kmem.lock);
     r->next = kmem.freelist;
     kmem.freelist = r;
+
+    freemem += PGSIZE;
     release(&kmem.lock);
 }
 
@@ -66,9 +69,29 @@ void* kalloc(void) {
     r = kmem.freelist;
     if (r)
         kmem.freelist = r->next;
+
+    freemem -= PGSIZE;
     release(&kmem.lock);
 
     if (r)
         memset((char*)r, 5, PGSIZE);  // fill with junk
     return (void*)r;
+}
+
+// 设置一个缓存变量 直接读取就可以了
+// TODO CAS 现在有可能多个CPU下会有并发错误的
+uint64 kgetmem(void) {
+    // if (freemem != 0) {
+    // return freemem;
+    // } else {
+    uint64 retV = 0;
+    struct run* r;
+    r = kmem.freelist;
+    while (r != (void*)0) {
+        retV += PGSIZE;
+        r = r->next;
+    }
+    freemem = retV;
+    return retV;
+    // }
 }

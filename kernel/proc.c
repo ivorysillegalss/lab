@@ -615,3 +615,27 @@ void procdump(void) {
         printf("\n");
     }
 }
+
+// 获取各种状态的线程的数量
+int get_proc_cnt(int proc_state) {
+    int cnt = 0;
+    struct proc* p;
+    for (p = proc; p < &proc[NPROC]; p++) {
+        if (p->state == proc_state) {
+            cnt ++;
+        }
+    }
+    return cnt;
+}
+
+// TODO 修改逻辑与上面合并 统一维护值
+uint64 getunusedproc(void){
+    uint64 cnt = 0;
+    struct proc* p;
+    for (p = proc; p < &proc[NPROC]; p ++) {
+        if (p->state != UNUSED) {
+            cnt++;
+        }
+    }
+    return cnt;
+}
