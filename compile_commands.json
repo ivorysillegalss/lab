@@ -48,9 +48,8 @@
       "-c",
       "-o",
       "kernel/main.o",
-      "kernel/main.c",
       "kernel/entry.o",
-      "kernel/entry.c"
+      "kernel/entry.S"
     ],
     "directory": "/home/chenz/xv6-labs-2021",
     "file": "/home/chenz/xv6-labs-2021/kernel/main.c",
