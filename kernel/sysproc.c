@@ -79,3 +79,13 @@ uint64 sys_uptime(void) {
     release(&tickslock);
     return xticks;
 }
+
+uint64 sys_trace(void) {
+    int mask;
+    if (argint(0, &mask) < 0)
+        return -1;
+    struct proc* p = myproc();
+    // 该系统调用是追踪 只需要注册对应的系统调用编号即可
+    p->trace_mask = mask;
+    return 0;
+}

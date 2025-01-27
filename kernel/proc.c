@@ -93,6 +93,10 @@ int allocpid() {
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
 // If there are no free procs, or a memory allocation fails, return 0.
+// -------------------------------------------------------
+// 遍历进程表 悲观锁方式 抽取线程判断是否使用过
+// 符合条件 goto 找到分支
+// 不符合条件 放锁return0 标识找不到
 static struct proc* allocproc(void) {
     struct proc* p;
 
@@ -203,17 +207,22 @@ uchar initcode[] = {0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02, 0x97,
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 // Set up first user process.
+// 初始化操作系统启动后 用户空间的第一个进程 等待调度器的调度
 void userinit(void) {
     struct proc* p;
 
+    // 抽取空闲进程资源
     p = allocproc();
     initproc = p;
 
     // allocate one user page and copy init's instructions
     // and data into it.
+    // 分配并将初始化的代码内容赋值到代码的页表当中
     uvminit(p->pagetable, initcode, sizeof(initcode));
+    // 设置页初始大小
     p->sz = PGSIZE;
 
+    // 配置trapframe 内核用户空间切换段落
     // prepare for the very first "return" from kernel to user.
     p->trapframe->epc = 0;      // user program counter
     p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -221,6 +230,7 @@ void userinit(void) {
     safestrcpy(p->name, "initcode", sizeof(p->name));
     p->cwd = namei("/");
 
+    // 设置运行状态
     p->state = RUNNABLE;
 
     release(&p->lock);
@@ -269,6 +279,9 @@ int fork(void) {
 
     // Cause fork to return 0 in the child.
     np->trapframe->a0 = 0;
+
+    // 父子进程复制跟踪掩码
+    np->trace_mask = p->trace_mask;
 
     // increment reference counts on open file descriptors.
     for (i = 0; i < NOFILE; i++)
@@ -601,4 +614,28 @@ void procdump(void) {
         printf("%d %s %s", p->pid, state, p->name);
         printf("\n");
     }
+}
+
+// 获取各种状态的线程的数量
+int get_proc_cnt(int proc_state) {
+    int cnt = 0;
+    struct proc* p;
+    for (p = proc; p < &proc[NPROC]; p++) {
+        if (p->state == proc_state) {
+            cnt ++;
+        }
+    }
+    return cnt;
+}
+
+// TODO 修改逻辑与上面合并 统一维护值
+uint64 getunusedproc(void){
+    uint64 cnt = 0;
+    struct proc* p;
+    for (p = proc; p < &proc[NPROC]; p ++) {
+        if (p->state != UNUSED) {
+            cnt++;
+        }
+    }
+    return cnt;
 }

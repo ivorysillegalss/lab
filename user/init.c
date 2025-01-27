@@ -11,9 +11,12 @@
 
 char* argv[] = {"sh", 0};
 
+// 通过initCode.S文件exec调用
+// 将第一个用户空间的进程 exec成为sh
 int main(void) {
     int pid, wpid;
 
+    // 这里的console是提前已经通过consoleinit()方法提前进行定义了的
     if (open("console", O_RDWR) < 0) {
         mknod("console", CONSOLE, 0);
         open("console", O_RDWR);
@@ -25,10 +28,12 @@ int main(void) {
         printf("init: starting sh\n");
         pid = fork();
         if (pid < 0) {
+            // 父进程fork失败
             printf("init: fork failed\n");
             exit(1);
         }
         if (pid == 0) {
+            // 新进程exec为sh
             exec("sh", argv);
             printf("init: exec sh failed\n");
             exit(1);

@@ -1,7 +1,9 @@
 struct stat;
 struct rtcdate;
+struct sysinfo;
 
-// system calls
+// system calls 
+// 对应sysproc.c等文件中的实现
 int fork(void);
 int exit(int) __attribute__((noreturn));
 int wait(int*);
@@ -23,6 +25,8 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int trace(int);
+int sysinfo(struct sysinfo*);
 
 // ulib.c
 int stat(const char*, struct stat*);

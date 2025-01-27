@@ -93,6 +93,7 @@ pte_t* walk(pagetable_t pagetable, uint64 va, int alloc) {
 // Look up a virtual address, return the physical address,
 // or 0 if not mapped.
 // Can only be used to look up user pages.
+// 映射虚拟地址和实际的物理地址.
 uint64 walkaddr(pagetable_t pagetable, uint64 va) {
     pte_t* pte;
     uint64 pa;
@@ -186,14 +187,21 @@ pagetable_t uvmcreate() {
 // Load the user initcode into address 0 of pagetable,
 // for the very first process.
 // sz must be less than a page.
+// ------------------ .
+// 某个进程 分配对应的初始化代码
+// 形参分别为 须分配的页表 需分配的代码 分配的代码段大小
 void uvminit(pagetable_t pagetable, uchar* src, uint sz) {
     char* mem;
 
+    // 代码段超过页大小 返回失败
     if (sz >= PGSIZE)
         panic("inituvm: more than a page");
+    // 获取物理页 分配空间
     mem = kalloc();
     memset(mem, 0, PGSIZE);
+    // 为页设置权限
     mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_W | PTE_R | PTE_X | PTE_U);
+    // 初始化代码复制到 分配好的页当中
     memmove(mem, src, sz);
 }
 
@@ -314,21 +322,35 @@ void uvmclear(pagetable_t pagetable, uint64 va) {
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
+// pagetable 用户为颗粒度的虚拟存储页表.
+// dstva 目标虚拟地址.
+// src 内核复制的起始地址.
+// len 还需要操作的字节长度.
 int copyout(pagetable_t pagetable, uint64 dstva, char* src, uint64 len) {
     uint64 n, va0, pa0;
+    // va0是目标虚拟地址dstva的页对齐地址
+    // pa0是va0对应的物理地址
+    // n是当前操作的字节数（每轮遍历）
+    // len是还需要操作的字节数
 
     while (len > 0) {
+        // 获取页对齐地址
         va0 = PGROUNDDOWN(dstva);
+        // 虚拟地址映射到物理地址
         pa0 = walkaddr(pagetable, va0);
         if (pa0 == 0)
             return -1;
+        // 计算复制的字节数
         n = PGSIZE - (dstva - va0);
         if (n > len)
             n = len;
+        // 复制
         memmove((void*)(pa0 + (dstva - va0)), src, n);
 
+        // 更新遍历条件
         len -= n;
         src += n;
+        // 控制循环条件 确保循环的时候 是页对齐的基础上开始遍历的（只有第一次进来的时候不是对齐的）
         dstva = va0 + PGSIZE;
     }
     return 0;

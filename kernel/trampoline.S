@@ -13,6 +13,7 @@
 trampoline:
 .align 4
 .globl uservec
+# 异常处理入口地址 处理基本上下文切换 跳转到具体陷入处理逻辑
 uservec:    
 	#
         # trap.c sets stvec to point here, so
@@ -71,6 +72,7 @@ uservec:
         ld tp, 32(a0)
 
         # load the address of usertrap(), p->trapframe->kernel_trap
+        # 在当前进程的trapframe中已经规定了地址 此处只需要在内核空间中读取即可 读取执行的起始地址 跳转过去执行逻辑
         ld t0, 16(a0)
 
         # restore kernel page table from p->trapframe->kernel_satp

@@ -80,10 +80,14 @@ int filestat(struct file* f, uint64 addr) {
     struct proc* p = myproc();
     struct stat st;
 
+    // 文件类型合法性校验
     if (f->type == FD_INODE || f->type == FD_DEVICE) {
         ilock(f->ip);
+        // 从文件索引(inode)中获取文件信息并填充到st当中
         stati(f->ip, &st);
         iunlock(f->ip);
+
+        // 赋值到用户空间
         if (copyout(p->pagetable, addr, (char*)&st, sizeof(st)) < 0)
             return -1;
         return 0;
