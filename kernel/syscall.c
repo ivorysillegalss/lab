@@ -7,6 +7,8 @@
 #include "syscall.h"
 #include "defs.h"
 
+#define LAB_PGTBL
+
 // Fetch the uint64 at addr from the current process.
 int fetchaddr(uint64 addr, uint64* ip) {
     struct proc* p = myproc();

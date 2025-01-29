@@ -106,5 +106,6 @@ struct proc {
     struct inode* cwd;            // Current directory
     char name[16];                // Process name (debugging)
 
-    int trace_mask;               // Trace mask; if 0xFFFFFFFF all; else that plus;
+    int trace_mask;  // Trace mask; if 0xFFFFFFFF all; else that plus;
+    struct usyscall* usyscall_info;  // user / kernel model shared data
 };

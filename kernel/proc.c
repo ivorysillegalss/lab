@@ -114,6 +114,14 @@ found:
     p->pid = allocpid();
     p->state = USED;
 
+    // 为内核/用户空间共享内存板块 usyscallInfo 分配内存
+    if ((p->usyscall_info = (struct usyscall*)kalloc()) == 0) {
+        freeproc(p);
+        release(&p->lock);
+        return 0;
+    }
+    p->usyscall_info->pid = p->pid;
+
     // Allocate a trapframe page.
     if ((p->trapframe = (struct trapframe*)kalloc()) == 0) {
         freeproc(p);
@@ -141,10 +149,12 @@ found:
 // free a proc structure and the data hanging from it,
 // including user pages.
 // p->lock must be held.
+// 回收空间 防止内存泄漏等问题
 static void freeproc(struct proc* p) {
     if (p->trapframe)
         kfree((void*)p->trapframe);
     p->trapframe = 0;
+    // 解除虚拟内存和物理内存之间的映射
     if (p->pagetable)
         proc_freepagetable(p->pagetable, p->sz);
     p->pagetable = 0;
@@ -156,6 +166,11 @@ static void freeproc(struct proc* p) {
     p->killed = 0;
     p->xstate = 0;
     p->state = UNUSED;
+    p->trace_mask = 0;
+    if (p->usyscall_info) {
+        kfree((void*)p->usyscall_info);
+    }
+    p->usyscall_info = 0;
 }
 
 // Create a user page table for a given process,
@@ -186,6 +201,17 @@ pagetable_t proc_pagetable(struct proc* p) {
         return 0;
     }
 
+    // 在虚拟内存和物理内存间 映射usyscall
+    // 如果映射失败了 需要将之前成功的分配记录回滚 恢复现场
+    if (mappages(pagetable, USYSCALL, PGSIZE, (uint64)(p->usyscall_info),
+                 PTE_R | PTE_U) < 0) {
+        uvmfree(pagetable, 0);
+        // 回滚之前成功的TRAMPOLINE和TRAPFRAME间的映射
+        uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+        uvmunmap(pagetable, TRAPFRAME, 1, 0);
+        return 0;
+    }
+
     return pagetable;
 }
 
@@ -194,6 +220,7 @@ pagetable_t proc_pagetable(struct proc* p) {
 void proc_freepagetable(pagetable_t pagetable, uint64 sz) {
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
     uvmunmap(pagetable, TRAPFRAME, 1, 0);
+    uvmunmap(pagetable, USYSCALL, 1, 0);
     uvmfree(pagetable, sz);
 }
 
@@ -622,17 +649,17 @@ int get_proc_cnt(int proc_state) {
     struct proc* p;
     for (p = proc; p < &proc[NPROC]; p++) {
         if (p->state == proc_state) {
-            cnt ++;
+            cnt++;
         }
     }
     return cnt;
 }
 
 // TODO 修改逻辑与上面合并 统一维护值
-uint64 getunusedproc(void){
+uint64 getunusedproc(void) {
     uint64 cnt = 0;
     struct proc* p;
-    for (p = proc; p < &proc[NPROC]; p ++) {
+    for (p = proc; p < &proc[NPROC]; p++) {
         if (p->state != UNUSED) {
             cnt++;
         }
