@@ -62,9 +62,19 @@ uint64 sys_sleep(void) {
 }
 
 #ifdef LAB_PGTBL
-int sys_pgaccess(void) {
-  // lab pgtbl: your code here.
-  return 0;
+uint64 sys_pgaccess(void) {
+    uint64 start_address;
+    int pages_num;
+    uint64 bitmask_addr;
+    if (argaddr(0, &start_address) | argint(1, &pages_num) |
+        argaddr(2, &bitmask_addr)) {
+        return -1;
+    }
+    // 人为设置访问页上限 没有啥原因 PGSIZE好看而已
+    if (pages_num > PGSIZE) {
+        return -1;
+    }
+    return isaccessed(start_address, pages_num, bitmask_addr);
 }
 #endif
 

@@ -258,10 +258,13 @@ static inline void sfence_vma() {
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE - 1))
 
 #define PTE_V (1L << 0)  // valid
-#define PTE_R (1L << 1)
-#define PTE_W (1L << 2)
-#define PTE_X (1L << 3)
+#define PTE_R (1L << 1)  // read
+#define PTE_W (1L << 2)  // write
+#define PTE_X (1L << 3)  // execute
 #define PTE_U (1L << 4)  // 1 -> user can access
+#define PTE_G (1L << 5)  // global 全局映射位 不会因进程切换而失效
+#define PTE_A (1L << 6)  // accessed 访问位
+#define PTE_D (1L << 7)  // dirty 脏页位 需写回刷新
 
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)

@@ -112,6 +112,10 @@ uint64 walkaddr(pagetable_t pagetable, uint64 va) {
     return pa;
 }
 
+pte_t* walkpte(pagetable_t pagetable, uint64 va) {
+    return walk(pagetable, va, 0);
+}
+
 // add a mapping to the kernel page table.
 // only used when booting.
 // does not flush TLB or enable paging.

@@ -666,3 +666,33 @@ uint64 getunusedproc(void) {
     }
     return cnt;
 }
+
+int ceildivide(int a, int b) {
+    if (a % b == 0) {
+        return a / b;
+    }
+    return a / b + 1;
+}
+
+int isaccessed(uint64 start_address, int page_nums, uint64 bit_mask) {
+    struct proc* p = myproc();
+
+    uint8 bitmask[ceildivide(page_nums, 8)];
+    memset(bitmask, 0, sizeof(bitmask));
+
+    for (int i = 0; i < page_nums; i++) {
+        uint64 addr = start_address + i * PGSIZE;
+        if (addr > MAXVA)
+            return -1;
+
+        pte_t* pte = walkpte(p->pagetable, addr);
+        if (pte && (*pte & PTE_V) && (*pte & PTE_A)) {
+            bitmask[i / 8] |= (1 << (i % 8));
+            *pte &= ~PTE_A;
+        }
+    }
+    if (copyout(p->pagetable, bit_mask, (char*)&bitmask, sizeof(bitmask)) < 0) {
+        return -1;
+    }
+    return 0;
+}

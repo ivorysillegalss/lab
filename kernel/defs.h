@@ -110,6 +110,7 @@ int either_copyin(void* dst, int user_src, uint64 src, uint64 len);
 void procdump(void);
 int get_proc_cnt(int);
 uint64 getunusedproc(void);
+int isaccessed(uint64, int, uint64);
 
 // swtch.S
 void swtch(struct context*, struct context*);
@@ -177,6 +178,7 @@ int copyout(pagetable_t, uint64, char*, uint64);
 int copyin(pagetable_t, char*, uint64, uint64);
 int copyinstr(pagetable_t, char*, uint64, uint64);
 void vmprint(pagetable_t, uint);
+pte_t* walkpte(pagetable_t pagetable, uint64 va);
 
 // plic.c
 void plicinit(void);
