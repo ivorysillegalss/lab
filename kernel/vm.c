@@ -250,21 +250,55 @@ uint64 uvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz) {
 
 // Recursively free page-table pages.
 // All leaf mappings must already have been removed.
+// 递归到最深层 解索引.
 void freewalk(pagetable_t pagetable) {
     // there are 2^9 = 512 PTEs in a page table.
     for (int i = 0; i < 512; i++) {
         pte_t pte = pagetable[i];
         // pte不存在 或PTE_V没有设置
+
+        // 标识非叶子节点（页目录项） 中间节点是没有R W X这些权限的
         if ((pte & PTE_V) && (pte & (PTE_R | PTE_W | PTE_X)) == 0) {
             // this PTE points to a lower-level page table.
             uint64 child = PTE2PA(pte);
             freewalk((pagetable_t)child);
+            // 清除其中内容
             pagetable[i] = 0;
+
+            // 标识为叶子节点 只有物理的节点可以有R W X这些权限
         } else if (pte & PTE_V) {
             panic("freewalk: leaf");
         }
     }
     kfree((void*)pagetable);
+}
+
+void vmprint(pagetable_t pagetable, uint depth) {
+    for (int i = 0; i < 512; i++) {
+        pte_t pte = pagetable[i];
+
+        // 同理 非叶子节点 无权限
+        if ((pte & PTE_V) && (pte & (PTE_R | PTE_W | PTE_X)) == 0) {
+
+            // 获取目录项的内存
+            uint64 child = PTE2PA(pte);
+
+            // 遍历表示深度
+            for (int j = 1; j < depth; j++) {
+                printf(".. ");
+            }
+            printf("..");
+            printf("%d: pte %p pa %p\n", i, (void*)pte, (void*)child);
+
+            // 递归查找
+            vmprint((pagetable_t)child, depth + 1);
+
+            // 叶子节点
+        } else if (pte & PTE_V) {
+            printf(".. .. ..");
+            printf("%d: pte %p pa %p\n", i, (void*)pte, (void*)PTE2PA(pte));
+        }
+    }
 }
 
 // Free user memory pages,
