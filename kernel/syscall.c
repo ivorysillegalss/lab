@@ -103,9 +103,7 @@ extern uint64 sys_info(void);
 #ifdef LAB_NET
 extern uint64 sys_connect(void);
 #endif
-#ifdef LAB_PGTBL
 extern uint64 sys_pgaccess(void);
-#endif
 
 static uint64 (*syscalls[])(void) = {
     [SYS_fork] sys_fork,         [SYS_exit] sys_exit,
@@ -123,9 +121,8 @@ static uint64 (*syscalls[])(void) = {
 #ifdef LAB_NET
     [SYS_connect] sys_connect,
 #endif
-#ifdef LAB_PGTBL
+
     [SYS_pgaccess] sys_pgaccess,
-#endif
 };
 
 static char* syscall_names[] = {

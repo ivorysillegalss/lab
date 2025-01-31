@@ -2,8 +2,6 @@ struct stat;
 struct rtcdate;
 struct sysinfo;
 
-#define LAB_PGTBL
-
 // system calls
 // 对应sysproc.c等文件中的实现
 int fork(void);
@@ -33,11 +31,9 @@ int sysinfo(struct sysinfo*);
 int connect(uint32, uint16, uint16);
 #endif
 
-#ifdef LAB_PGTBL
 int pgaccess(void* base, int len, void* mask);
 // usyscall region
 int ugetpid(void);
-#endif
 
 // ulib.c
 int stat(const char*, struct stat*);

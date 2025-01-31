@@ -61,7 +61,6 @@ uint64 sys_sleep(void) {
     return 0;
 }
 
-#ifdef LAB_PGTBL
 uint64 sys_pgaccess(void) {
     uint64 start_address;
     int pages_num;
@@ -76,7 +75,6 @@ uint64 sys_pgaccess(void) {
     }
     return isaccessed(start_address, pages_num, bitmask_addr);
 }
-#endif
 
 uint64 sys_kill(void) {
     int pid;
