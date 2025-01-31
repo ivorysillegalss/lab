@@ -64,6 +64,7 @@ void usertrap(void) {
 
         // an interrupt will change sstatus &c registers,
         // so don't enable until done with those registers.
+        // 进入内核态的时候 硬件会自动全局禁用中断 防止内核中中断的嵌套 直至此处人为启动中断 才可以重新开始中断
         intr_on();
 
         // 真正执行系统调用
@@ -127,7 +128,9 @@ void usertrapret(void) {
     // jump to trampoline.S at the top of memory, which
     // switches to the user page table, restores user registers,
     // and switches to user mode with sret.
+    // 这里指的是 以TRAMPOLINE为基地址的 对应函数起始地址的便宜量（具体对应trampoline.S中的代码位置）
     uint64 fn = TRAMPOLINE + (userret - trampoline);
+    // 将对应的指针转为函数 传入TRAPFRAME的位置和satp寄存器值进去
     ((void (*)(uint64, uint64))fn)(TRAPFRAME, satp);
 }
 
