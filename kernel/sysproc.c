@@ -45,11 +45,13 @@ uint64 sys_sbrk(void) {
 uint64 sys_sleep(void) {
     int n;
     uint ticks0;
-
     if (argint(0, &n) < 0)
         return -1;
+
+    // 上锁
     acquire(&tickslock);
     ticks0 = ticks;
+    // 自旋
     while (ticks - ticks0 < n) {
         if (myproc()->killed) {
             release(&tickslock);
@@ -58,6 +60,7 @@ uint64 sys_sleep(void) {
         sleep(&ticks, &tickslock);
     }
     release(&tickslock);
+    backtrace();
     return 0;
 }
 

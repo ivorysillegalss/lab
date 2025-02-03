@@ -251,6 +251,14 @@ static inline void sfence_vma() {
     asm volatile("sfence.vma zero, zero");
 }
 
+// read value in s0 (which storage the stack frame pointer)
+// 读取当前的帧指针并且返回
+static inline uint64 r_fp() {
+    uint64 x;
+    asm volatile("mv %0, s0" : "=r"(x));
+    return x;
+}
+
 #define PGSIZE 4096  // bytes per page
 #define PGSHIFT 12   // bits of offset within a page
 
@@ -271,7 +279,7 @@ static inline void sfence_vma() {
 
 #define PTE2PA(pte) (((pte) >> 10) << 12)
 
-#define PTE_FLAGS(pte) ((pte)&0x3FF)
+#define PTE_FLAGS(pte) ((pte) & 0x3FF)
 
 // extract the three 9-bit page table indices from a virtual address.
 #define PXMASK 0x1FF  // 9 bits
