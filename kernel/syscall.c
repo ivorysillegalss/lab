@@ -100,6 +100,8 @@ extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 extern uint64 sys_trace(void);
 extern uint64 sys_info(void);
+extern uint64 sys_sigalarm(void);
+extern uint64 sys_sigreturn(void);
 #ifdef LAB_NET
 extern uint64 sys_connect(void);
 #endif
@@ -117,7 +119,8 @@ static uint64 (*syscalls[])(void) = {
     [SYS_mknod] sys_mknod,       [SYS_unlink] sys_unlink,
     [SYS_link] sys_link,         [SYS_mkdir] sys_mkdir,
     [SYS_close] sys_close,       [SYS_trace] sys_trace,
-    [SYS_sysinfo] sys_info,
+    [SYS_sysinfo] sys_info, [SYS_sigalarm] sys_sigalarm,
+    [SYS_sigreturn] sys_sigreturn,
 #ifdef LAB_NET
     [SYS_connect] sys_connect,
 #endif
@@ -127,10 +130,10 @@ static uint64 (*syscalls[])(void) = {
 
 static char* syscall_names[] = {
     // syscall调用编号从1开始 这里留空是为了方便打印输出
-    "",       "fork",  "exit",   "wait",  "pipe",  "read",
-    "kill",   "exec",  "fstat",  "chdir", "dup",   "getpid",
-    "sbrk",   "sleep", "uptime", "open",  "write", "mknod",
-    "unlink", "link",  "mkdir",  "close", "trace", "sysinfo"};
+    "",       "fork",  "exit",    "wait",     "pipe",     "read", "kill",
+    "exec",   "fstat", "chdir",   "dup",      "getpid",   "sbrk", "sleep",
+    "uptime", "open",  "write",   "mknod",    "unlink",   "link", "mkdir",
+    "close",  "trace", "sysinfo", "sigalarm", "sigreturn"};
 
 void syscall(void) {
     int num;
@@ -142,7 +145,8 @@ void syscall(void) {
         uint64 retV = syscalls[num]();
         p->trapframe->a0 = retV;
 
-        if (p->trace_mask & (1 << num)) {
+        // if (p->trace_mask & (1 << num)) {
+        if (p->trace_mask == num) {
             printf("%d: syscall %s -> %d\n", p->pid, syscall_names[num], retV);
         }
 

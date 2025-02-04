@@ -82,6 +82,13 @@ struct trapframe {
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+
+struct sigcontext {
+    int alramtick;
+    int ticks;  // ticks after last sigalarm. 自上次警告处理器过去 已经过去了多少个刻度
+    uint64 handler;  // func exec when alarm. sigalarm 的时候执行的函数
+};
+
 // Per-process state
 struct proc {
     struct spinlock lock;
@@ -108,4 +115,5 @@ struct proc {
 
     int trace_mask;  // Trace mask; if 0xFFFFFFFF all; else that plus;
     struct usyscall* usyscall_info;  // user / kernel model shared data
+    struct sigcontext sigcontext;
 };

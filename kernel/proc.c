@@ -143,6 +143,12 @@ found:
     p->context.ra = (uint64)forkret;
     p->context.sp = p->kstack + PGSIZE;
 
+    // 为alarm函数分配空间
+    memset(&p->sigcontext, 0, sizeof(p->sigcontext));
+    p->sigcontext.alramtick = 0;
+    p->sigcontext.ticks = 0;
+    p->sigcontext.handler = 0;
+
     return p;
 }
 

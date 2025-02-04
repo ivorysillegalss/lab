@@ -27,11 +27,12 @@ void trapinithart(void) {
 
 //
 // handle an interrupt, exception, or system call from user space.
-// called from trampoline.S
+// called from trampoline.S.
 //
-// 将程序调用由用户空间过渡到内核空间
-// 陷入处理器（中断 异常 系统调用）
-// 本身是写在trapframe当中 在内核空间中调用时 读取trapframe中的地址 jump到此处执行方法
+// 每个中断发生 都会调用该函数. 通过which_dev变量来判断中断的类型.
+// 将程序调用由用户空间过渡到内核空间.
+// 陷入处理器（中断 异常 系统调用）.
+// 本身是写在trapframe当中 在内核空间中调用时 读取trapframe中的地址 jump到此处执行方法.
 void usertrap(void) {
     int which_dev = 0;
 
@@ -49,6 +50,8 @@ void usertrap(void) {
     // save user program counter.
     // 保存用户空间当前执行的进度（栈顶）
     p->trapframe->epc = r_sepc();
+
+    p->sigcontext.ticks++;
 
     if (r_scause() == 8) {
         // system call
@@ -82,9 +85,14 @@ void usertrap(void) {
 
     // give up the CPU if this is a timer interrupt.
     // 定时片花完了 主动让出CPU
-    if (which_dev == 2)
+    if (which_dev == 2) {
+        struct sigcontext sigctx = p->sigcontext;
+        sigctx.ticks++;
+        if (sigctx.ticks % sigctx.alramtick == 0) {
+            p->trapframe->epc = sigctx.handler; 
+        }
         yield();
-
+    }
     usertrapret();
 }
 
