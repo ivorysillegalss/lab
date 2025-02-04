@@ -51,8 +51,6 @@ void usertrap(void) {
     // 保存用户空间当前执行的进度（栈顶）
     p->trapframe->epc = r_sepc();
 
-    p->sigcontext.ticks++;
-
     if (r_scause() == 8) {
         // system call
 
@@ -86,10 +84,10 @@ void usertrap(void) {
     // give up the CPU if this is a timer interrupt.
     // 定时片花完了 主动让出CPU
     if (which_dev == 2) {
-        struct sigcontext sigctx = p->sigcontext;
-        sigctx.ticks++;
-        if (sigctx.ticks % sigctx.alramtick == 0) {
-            p->trapframe->epc = sigctx.handler; 
+        struct sigcontext* sigctx = &p->sigcontext;
+        sigctx->ticks++;
+        if (sigctx->ticks % sigctx->alramtick == 0) {
+            p->trapframe->epc = sigctx->handler; 
         }
         yield();
     }

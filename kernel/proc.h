@@ -84,7 +84,7 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 
 struct sigcontext {
-    int alramtick;
+    int alramtick; // demanded alram ticks. 调用时机（触发调用的刻度数）
     int ticks;  // ticks after last sigalarm. 自上次警告处理器过去 已经过去了多少个刻度
     uint64 handler;  // func exec when alarm. sigalarm 的时候执行的函数
 };

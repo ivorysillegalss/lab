@@ -49,7 +49,6 @@ void test0() {
             break;
     }
     sigalarm(0, 0);
-    printf("1\n");
     if (count > 0) {
         printf("test0 passed\n");
     } else {
