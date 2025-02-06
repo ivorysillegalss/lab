@@ -112,17 +112,23 @@ uint64 sys_trace(void) {
 uint64 sys_sigalarm(void) {
     int ticks;
     uint64 hp;
-    if (argint(0, &ticks) < 0 || argaddr(1, &hp)) {
+    if (argint(0, &ticks) < 0 || argaddr(1, &hp) < 0) {
         return -1;
     }
     struct proc* p = myproc();
-    p->sigcontext.alramtick = ticks;
-    p->sigcontext.ticks = 0;
-    p->sigcontext.handler = hp;
+
+    p->sigcontext->alramtick = ticks;
+    p->sigcontext->ticks = 0;
+    p->sigcontext->handler = hp;
     return 0;
 }
 
-//
+// 返回函数
 uint64 sys_sigreturn(void) {
+    struct proc* p = myproc();
+    // 恢复现场
+    load_userregister(p);
+    p->trapframe->epc = p->epc;
+    p->inalarm = 0;
     return 0;
 }

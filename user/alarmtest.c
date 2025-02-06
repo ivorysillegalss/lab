@@ -5,7 +5,6 @@
 // modifications pass the original
 // versions of these tests.
 //
-
 #include "kernel/param.h"
 #include "kernel/types.h"
 #include "kernel/stat.h"
@@ -42,7 +41,6 @@ void test0() {
 
     sigalarm(2, periodic);
     for (i = 0; i < 1000 * 500000; i++) {
-      // printf("%d\n",i);
         if ((i % 1000000) == 0)
             write(2, ".", 1);
         if (count > 0)

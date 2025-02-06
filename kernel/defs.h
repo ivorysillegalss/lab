@@ -112,6 +112,7 @@ void procdump(void);
 int get_proc_cnt(int);
 uint64 getunusedproc(void);
 int isaccessed(uint64, int, uint64);
+void load_userregister(struct proc*);
 
 // swtch.S
 void swtch(struct context*, struct context*);

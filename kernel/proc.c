@@ -137,6 +137,12 @@ found:
         return 0;
     }
 
+    if ((p->sigcontext = (struct sigcontext*)kalloc()) == 0) {
+        freeproc(p);
+        release(&p->lock);
+        return 0;
+    }
+
     // Set up new context to start executing at forkret,
     // which returns to user space.
     memset(&p->context, 0, sizeof(p->context));
@@ -144,10 +150,12 @@ found:
     p->context.sp = p->kstack + PGSIZE;
 
     // 为alarm函数分配空间
-    memset(&p->sigcontext, 0, sizeof(p->sigcontext));
-    p->sigcontext.alramtick = 0;
-    p->sigcontext.ticks = 0;
-    p->sigcontext.handler = 0;
+    // memset(&p->sigcontext, 0, sizeof(p->sigcontext));
+    // p->sigcontext->alramtick = 0;
+    // p->sigcontext->ticks = 0;
+    // p->sigcontext->handler = 0;
+
+    memset(&p->sigregister, 0, sizeof(p->sigregister));
 
     return p;
 }
@@ -701,4 +709,43 @@ int isaccessed(uint64 start_address, int page_nums, uint64 bit_mask) {
         return -1;
     }
     return 0;
+}
+
+void load_userregister(struct proc* p) {
+    struct sigregister* s = &p->sigregister;
+    struct trapframe* t = p->trapframe;
+
+    t->ra = s->ra;
+    t->sp = s->sp;
+    t->gp = s->gp;
+    t->tp = s->tp;
+    t->t0 = s->t0;
+    t->t1 = s->t1;
+    t->t2 = s->t2;
+    t->s0 = s->s0;
+    t->s1 = s->s1;
+    t->a0 = s->a0;
+    t->a1 = s->a1;
+    t->a2 = s->a2;
+    t->a3 = s->a3;
+    t->a4 = s->a4;
+    t->a5 = s->a5;
+    t->a6 = s->a6;
+    t->a7 = s->a7;
+    t->s2 = s->s2;
+    t->s3 = s->s3;
+    t->s4 = s->s4;
+    t->s5 = s->s5;
+    t->s6 = s->s6;
+    t->s7 = s->s7;
+    t->s8 = s->s8;
+    t->s9 = s->s9;
+    t->s10 = s->s10;
+    t->s11 = s->s11;
+    t->t3 = s->t3;
+    t->t4 = s->t4;
+    t->t5 = s->t5;
+    t->t6 = s->t6;
+
+    return;
 }
