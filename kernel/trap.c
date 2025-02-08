@@ -231,6 +231,7 @@ void clockintr() {
 // returns 2 if timer interrupt,
 // 1 if other device,
 // 0 if not recognized.
+// 内核中断
 int devintr() {
     uint64 scause = r_scause();
 
@@ -241,6 +242,7 @@ int devintr() {
         int irq = plic_claim();
 
         if (irq == UART0_IRQ) {
+            // 如果是输入字符流 uart进行读取
             uartintr();
         } else if (irq == VIRTIO0_IRQ) {
             virtio_disk_intr();

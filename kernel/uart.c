@@ -101,6 +101,7 @@ void uartputc(int c) {
             // wait for uartstart() to open up space in the buffer.
             sleep(&uart_tx_r, &uart_tx_lock);
         } else {
+            // 将一个字符塞到uart缓冲区当中
             uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE] = c;
             uart_tx_w += 1;
             // 修改偏移量 输出
@@ -150,11 +151,12 @@ void uartstart() {
             return;
         }
 
+        // 从 UART 传输缓冲区中取出一个字符发送给 UART 控制器
         int c = uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE];
         uart_tx_r += 1;
 
         // maybe uartputc() is waiting for space in the buffer.
-        // 唤醒线程 等待字符输入缓冲区当中
+        // 唤醒线程 等待字符输入缓冲区当中 （如果之前缓冲区是满的话是sleep的 这里进行wakeup）
         wakeup(&uart_tx_r);
 
         WriteReg(THR, c);
