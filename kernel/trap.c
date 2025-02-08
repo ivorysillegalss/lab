@@ -25,13 +25,50 @@ void trapinithart(void) {
     w_stvec((uint64)kernelvec);
 }
 
+void saving_userregister(struct proc* p) {
+    struct sigregister* s = &p->sigregister;
+    struct trapframe* t = p->trapframe;
+    s->ra = t->ra;
+    s->sp = t->sp;
+    s->gp = t->gp;
+    s->tp = t->tp;
+    s->t0 = t->t0;
+    s->t1 = t->t1;
+    s->t2 = t->t2;
+    s->s0 = t->s0;
+    s->s1 = t->s1;
+    s->a0 = t->a0;
+    s->a1 = t->a1;
+    s->a2 = t->a2;
+    s->a3 = t->a3;
+    s->a4 = t->a4;
+    s->a5 = t->a5;
+    s->a6 = t->a6;
+    s->a7 = t->a7;
+    s->s2 = t->s2;
+    s->s3 = t->s3;
+    s->s4 = t->s4;
+    s->s5 = t->s5;
+    s->s6 = t->s6;
+    s->s7 = t->s7;
+    s->s8 = t->s8;
+    s->s9 = t->s9;
+    s->s10 = t->s10;
+    s->s11 = t->s11;
+    s->t3 = t->t3;
+    s->t4 = t->t4;
+    s->t5 = t->t5;
+    s->t6 = t->t6;
+}
+
 //
 // handle an interrupt, exception, or system call from user space.
-// called from trampoline.S
+// called from trampoline.S.
 //
-// 将程序调用由用户空间过渡到内核空间
-// 陷入处理器（中断 异常 系统调用）
-// 本身是写在trapframe当中 在内核空间中调用时 读取trapframe中的地址 jump到此处执行方法
+// 每个中断发生 都会调用该函数. 通过which_dev变量来判断中断的类型.
+// 将程序调用由用户空间过渡到内核空间.
+// 陷入处理器（中断 异常 系统调用）.
+// 本身是写在trapframe当中 在内核空间中调用时 读取trapframe中的地址 jump到此处执行方法.
 void usertrap(void) {
     int which_dev = 0;
 
@@ -64,6 +101,7 @@ void usertrap(void) {
 
         // an interrupt will change sstatus &c registers,
         // so don't enable until done with those registers.
+        // 进入内核态的时候 硬件会自动全局禁用中断 防止内核中中断的嵌套 直至此处人为启动中断 才可以重新开始中断
         intr_on();
 
         // 真正执行系统调用
@@ -81,9 +119,27 @@ void usertrap(void) {
 
     // give up the CPU if this is a timer interrupt.
     // 定时片花完了 主动让出CPU
-    if (which_dev == 2)
-        yield();
+    if ((which_dev == 2) && (p->inalarm == 0)) {
+        struct sigcontext* sigctx = p->sigcontext;
+        if (p->sigcontext != 0) {
+            sigctx->ticks += 1;
 
+            // 判断是否满足回调条件
+            if (sigctx->alramtick != 0 && sigctx->ticks &&
+                sigctx->ticks == sigctx->alramtick) {
+                // 进入alarm函数内 清空计数器
+                p->inalarm = 1;
+                sigctx->ticks = 0;
+                // 保存寄存器中函数状态
+                saving_userregister(p);
+                // 存储epc的值
+                p->epc = p->trapframe->epc;
+                // 修改 执行alarm函数
+                p->trapframe->epc = sigctx->handler;
+            }
+        }
+        yield();
+    }
     usertrapret();
 }
 
@@ -127,7 +183,9 @@ void usertrapret(void) {
     // jump to trampoline.S at the top of memory, which
     // switches to the user page table, restores user registers,
     // and switches to user mode with sret.
+    // 这里指的是 以TRAMPOLINE为基地址的 对应函数起始地址的便宜量（具体对应trampoline.S中的代码位置）
     uint64 fn = TRAMPOLINE + (userret - trampoline);
+    // 将对应的指针转为函数 传入TRAPFRAME的位置和satp寄存器值进去
     ((void (*)(uint64, uint64))fn)(TRAPFRAME, satp);
 }
 

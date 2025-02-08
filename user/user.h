@@ -2,7 +2,7 @@ struct stat;
 struct rtcdate;
 struct sysinfo;
 
-// system calls 
+// system calls
 // 对应sysproc.c等文件中的实现
 int fork(void);
 int exit(int) __attribute__((noreturn));
@@ -27,6 +27,15 @@ int sleep(int);
 int uptime(void);
 int trace(int);
 int sysinfo(struct sysinfo*);
+int sigalarm(int ticks, void (*handler)());
+int sigreturn(void);
+#ifdef LAB_NET
+int connect(uint32, uint16, uint16);
+#endif
+
+int pgaccess(void* base, int len, void* mask);
+// usyscall region
+int ugetpid(void);
 
 // ulib.c
 int stat(const char*, struct stat*);
@@ -34,7 +43,6 @@ char* strcpy(char*, const char*);
 void* memmove(void*, const void*, int);
 char* strchr(const char*, char c);
 int strcmp(const char*, const char*);
-char* strcat(char* s, const char* t);
 void fprintf(int, const char*, ...);
 void printf(const char*, ...);
 char* gets(char*, int max);
@@ -45,3 +53,4 @@ void free(void*);
 int atoi(const char*);
 int memcmp(const void*, const void*, uint);
 void* memcpy(void*, const void*, uint);
+int statistics(void*, int);

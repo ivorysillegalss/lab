@@ -1,3 +1,4 @@
 {
-    "CodeGPT.apiKey": "CodeGPT Plus Beta"
+    "clang-format.executable": "./.clang-format",
+    "makefile.configureOnOpen": false
 }

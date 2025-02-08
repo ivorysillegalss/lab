@@ -114,6 +114,14 @@ found:
     p->pid = allocpid();
     p->state = USED;
 
+    // 为内核/用户空间共享内存板块 usyscallInfo 分配内存
+    if ((p->usyscall_info = (struct usyscall*)kalloc()) == 0) {
+        freeproc(p);
+        release(&p->lock);
+        return 0;
+    }
+    p->usyscall_info->pid = p->pid;
+
     // Allocate a trapframe page.
     if ((p->trapframe = (struct trapframe*)kalloc()) == 0) {
         freeproc(p);
@@ -129,11 +137,25 @@ found:
         return 0;
     }
 
+    if ((p->sigcontext = (struct sigcontext*)kalloc()) == 0) {
+        freeproc(p);
+        release(&p->lock);
+        return 0;
+    }
+
     // Set up new context to start executing at forkret,
     // which returns to user space.
     memset(&p->context, 0, sizeof(p->context));
     p->context.ra = (uint64)forkret;
     p->context.sp = p->kstack + PGSIZE;
+
+    // 为alarm函数分配空间
+    // memset(&p->sigcontext, 0, sizeof(p->sigcontext));
+    // p->sigcontext->alramtick = 0;
+    // p->sigcontext->ticks = 0;
+    // p->sigcontext->handler = 0;
+
+    memset(&p->sigregister, 0, sizeof(p->sigregister));
 
     return p;
 }
@@ -141,10 +163,12 @@ found:
 // free a proc structure and the data hanging from it,
 // including user pages.
 // p->lock must be held.
+// 回收空间 防止内存泄漏等问题
 static void freeproc(struct proc* p) {
     if (p->trapframe)
         kfree((void*)p->trapframe);
     p->trapframe = 0;
+    // 解除虚拟内存和物理内存之间的映射
     if (p->pagetable)
         proc_freepagetable(p->pagetable, p->sz);
     p->pagetable = 0;
@@ -156,6 +180,11 @@ static void freeproc(struct proc* p) {
     p->killed = 0;
     p->xstate = 0;
     p->state = UNUSED;
+    p->trace_mask = 0;
+    if (p->usyscall_info) {
+        kfree((void*)p->usyscall_info);
+    }
+    p->usyscall_info = 0;
 }
 
 // Create a user page table for a given process,
@@ -186,6 +215,17 @@ pagetable_t proc_pagetable(struct proc* p) {
         return 0;
     }
 
+    // 在虚拟内存和物理内存间 映射usyscall
+    // 如果映射失败了 需要将之前成功的分配记录回滚 恢复现场
+    if (mappages(pagetable, USYSCALL, PGSIZE, (uint64)(p->usyscall_info),
+                 PTE_R | PTE_U) < 0) {
+        uvmfree(pagetable, 0);
+        // 回滚之前成功的TRAMPOLINE和TRAPFRAME间的映射
+        uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+        uvmunmap(pagetable, TRAPFRAME, 1, 0);
+        return 0;
+    }
+
     return pagetable;
 }
 
@@ -194,6 +234,7 @@ pagetable_t proc_pagetable(struct proc* p) {
 void proc_freepagetable(pagetable_t pagetable, uint64 sz) {
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
     uvmunmap(pagetable, TRAPFRAME, 1, 0);
+    uvmunmap(pagetable, USYSCALL, 1, 0);
     uvmfree(pagetable, sz);
 }
 
@@ -622,20 +663,89 @@ int get_proc_cnt(int proc_state) {
     struct proc* p;
     for (p = proc; p < &proc[NPROC]; p++) {
         if (p->state == proc_state) {
-            cnt ++;
+            cnt++;
         }
     }
     return cnt;
 }
 
 // TODO 修改逻辑与上面合并 统一维护值
-uint64 getunusedproc(void){
+uint64 getunusedproc(void) {
     uint64 cnt = 0;
     struct proc* p;
-    for (p = proc; p < &proc[NPROC]; p ++) {
+    for (p = proc; p < &proc[NPROC]; p++) {
         if (p->state != UNUSED) {
             cnt++;
         }
     }
     return cnt;
+}
+
+int ceildivide(int a, int b) {
+    if (a % b == 0) {
+        return a / b;
+    }
+    return a / b + 1;
+}
+
+int isaccessed(uint64 start_address, int page_nums, uint64 bit_mask) {
+    struct proc* p = myproc();
+
+    uint8 bitmask[ceildivide(page_nums, 8)];
+    memset(bitmask, 0, sizeof(bitmask));
+
+    for (int i = 0; i < page_nums; i++) {
+        uint64 addr = start_address + i * PGSIZE;
+        if (addr > MAXVA)
+            return -1;
+
+        pte_t* pte = walkpte(p->pagetable, addr);
+        if (pte && (*pte & PTE_V) && (*pte & PTE_A)) {
+            bitmask[i / 8] |= (1 << (i % 8));
+            *pte &= ~PTE_A;
+        }
+    }
+    if (copyout(p->pagetable, bit_mask, (char*)&bitmask, sizeof(bitmask)) < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+void load_userregister(struct proc* p) {
+    struct sigregister* s = &p->sigregister;
+    struct trapframe* t = p->trapframe;
+
+    t->ra = s->ra;
+    t->sp = s->sp;
+    t->gp = s->gp;
+    t->tp = s->tp;
+    t->t0 = s->t0;
+    t->t1 = s->t1;
+    t->t2 = s->t2;
+    t->s0 = s->s0;
+    t->s1 = s->s1;
+    t->a0 = s->a0;
+    t->a1 = s->a1;
+    t->a2 = s->a2;
+    t->a3 = s->a3;
+    t->a4 = s->a4;
+    t->a5 = s->a5;
+    t->a6 = s->a6;
+    t->a7 = s->a7;
+    t->s2 = s->s2;
+    t->s3 = s->s3;
+    t->s4 = s->s4;
+    t->s5 = s->s5;
+    t->s6 = s->s6;
+    t->s7 = s->s7;
+    t->s8 = s->s8;
+    t->s9 = s->s9;
+    t->s10 = s->s10;
+    t->s11 = s->s11;
+    t->t3 = s->t3;
+    t->t4 = s->t4;
+    t->t5 = s->t5;
+    t->t6 = s->t6;
+
+    return;
 }

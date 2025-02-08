@@ -67,7 +67,7 @@ uservec:
 
         # restore kernel stack pointer from p->trapframe->kernel_sp
         ld sp, 8(a0)
-
+        
         # make tp hold the current hartid, from p->trapframe->kernel_hartid
         ld tp, 32(a0)
 
@@ -88,6 +88,7 @@ uservec:
 
 .globl userret
 userret:
+        # 此处的代码段是指系统调用完毕之后 返回用户空间时执行的代码
         # userret(TRAPFRAME, pagetable)
         # switch from kernel to user.
         # usertrapret() calls here.
@@ -95,11 +96,15 @@ userret:
         # a1: user page table, for satp.
 
         # switch to the user page table.
+        # 交换寄存器中的值
         csrw satp, a1
         sfence.vma zero, zero
 
         # put the saved user a0 in sscratch, so we
         # can swap it with our a0 (TRAPFRAME) in the last step.
+        # a0中一般来说是系统调用之后的返回值 此处将它的值转移存储到t0当中
+        # 然后将sscratch寄存器和t0中的值交换
+        # 根据背景可以得到 交换之前t0存储的是返回值的数据 而sscratch的作用只是暂时进行存储
         ld t0, 112(a0)
         csrw sscratch, t0
 
@@ -136,6 +141,7 @@ userret:
         ld t6, 280(a0)
 
 	# restore user a0, and save TRAPFRAME in sscratch
+        # 再次进行交换 将交换恢复后的数据恢复到a0当中
         csrrw a0, sscratch, a0
         
         # return to user mode and user pc.
