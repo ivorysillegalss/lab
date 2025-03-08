@@ -108,6 +108,15 @@ void usertrap(void) {
         syscall();
     } else if ((which_dev = devintr()) != 0) {
         // ok
+    } else if ((r_scause() == 13) && (*p->pagetable & PTE_W) == 1) {
+        // COW页面错误 在此分配新页面
+        pagetable_t pte = p->pagetable;
+        PTE_RCSUB(*pte);
+        // 如果原页面已经没有被引用 或溢出 删除
+        // if (PTE_RC(*pte) == 0) {
+        
+        // }
+
     } else {
         printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
         printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

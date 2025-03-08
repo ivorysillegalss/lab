@@ -319,32 +319,52 @@ void uvmfree(pagetable_t pagetable, uint64 sz) {
 // physical memory.
 // returns 0 on success, -1 on failure.
 // frees any allocated pages on failure.
+// sz代表当前进程（程序）已分配的最后一个地址 表示当前进程所能申请到的最大范围（当前进程占用的总空间大小）
 int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz) {
     pte_t* pte;
-    uint64 pa, i;
-    uint flags;
-    char* mem;
+    uint64 i;
 
+    // uint64 pa, i;
+    // uint flags;
+    // char* mem;
+
+    // 这里通过虚拟内存的最高地址(sz) 并且由于虚拟地址是顺序写的
+    // 所以通过这个循环遍历就复制父进程原所有数据
+    // for (i = 0; i < sz; i += PGSIZE) {
+    //     if ((pte = walk(old, i, 0)) == 0)
+    //         panic("uvmcopy: pte should exist");
+    //     if ((*pte & PTE_V) == 0)
+    //         panic("uvmcopy: page not present");
+    //     pa = PTE2PA(*pte);
+    //     flags = PTE_FLAGS(*pte);
+    //     if ((mem = kalloc()) == 0)
+    //         goto err;
+    //     memmove(mem, (char*)pa, PGSIZE);
+    //     if (mappages(new, i, PGSIZE, (uint64)mem, flags) != 0) {
+    //         kfree(mem);
+    //         goto err;
+    //     }
+    // }
+
+    // 通过CopyOnWrite修改后的思路 遍历的时候 如果有PTE_W位 清除 并且打上PTE_C位
     for (i = 0; i < sz; i += PGSIZE) {
         if ((pte = walk(old, i, 0)) == 0)
             panic("uvmcopy: pte should exist");
         if ((*pte & PTE_V) == 0)
             panic("uvmcopy: page not present");
-        pa = PTE2PA(*pte);
-        flags = PTE_FLAGS(*pte);
-        if ((mem = kalloc()) == 0)
-            goto err;
-        memmove(mem, (char*)pa, PGSIZE);
-        if (mappages(new, i, PGSIZE, (uint64)mem, flags) != 0) {
-            kfree(mem);
-            goto err;
+        // 如果有W位的话 清除 标记上COW位
+        if ((*pte & PTE_W) == 1) {
+            *pte |= PTE_C;
+            *pte &= ~PTE_W;
+            PTE_RCINC(*pte);
         }
     }
+
     return 0;
 
-err:
-    uvmunmap(new, 0, i / PGSIZE, 1);
-    return -1;
+    // err:
+    //     uvmunmap(new, 0, i / PGSIZE, 1);
+    //     return -1;
 }
 
 // mark a PTE invalid for user access.
