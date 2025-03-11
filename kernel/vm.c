@@ -354,8 +354,25 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz) {
             panic("uvmcopy: page not present");
         // 如果有W位的话 清除 标记上COW位
         if ((*pte & PTE_W) == 1) {
+
+            // 获取子进程的页表项（需确保子进程页表已分配）
+            pte_t* pte_child =
+                walk(new, i, 1);  // 第三个参数为1表示必要时创建页表项
+            if (!pte_child)
+                panic("uvmcopy: failed to map child PTE");
+
             *pte |= PTE_C;
             *pte &= ~PTE_W;
+            uint64 pa = PTE2PA(*pte);
+            uint flags = PTE_FLAGS(*pte);
+
+            *pte = PA2PTE(pa) | flags;
+            *pte_child = PA2PTE(pa) | flags;
+
+            PTE_RCINC(*pte);
+        }
+        // 如果无W位 但是有C位 代表目前已经是在COW当中 在现有的引用次数上++
+        else if ((*pte & PTE_C) == 1) {
             PTE_RCINC(*pte);
         }
     }

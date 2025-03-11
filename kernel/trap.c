@@ -108,14 +108,31 @@ void usertrap(void) {
         syscall();
     } else if ((which_dev = devintr()) != 0) {
         // ok
-    } else if ((r_scause() == 13) && (*p->pagetable & PTE_W) == 1) {
+    } else if ((r_scause() == 13) && (*p->pagetable & PTE_C) == 1) {
         // COW页面错误 在此分配新页面
         pagetable_t pte = p->pagetable;
+        uint64 sz = p->sz;
         PTE_RCSUB(*pte);
         // 如果原页面已经没有被引用 或溢出 删除
-        // if (PTE_RC(*pte) == 0) {
+        // 如果原来的页面只剩一次引用 恢复回原来的位
+        if (PTE_RC(*pte) == 1) {
+            *pte |= PTE_W;
+            *pte &= ~PTE_C;
+            uvmunmap(pte, 0, PGROUNDUP(sz) / PGSIZE, 1);
+        }
+
+        // TODO
+        // 分配新页面 并且分配PTE_W位
+        uint64 pa = PTE2PA(*pte);
+        uint flags = PTE_FLAGS(*pte);
+        // 循环分配页表空间
+        char* mem;
+        if ((mem = kalloc()) == 0) {
+            // uvmunmap(mem, 0, i / PGSIZE, 1);
+            return -1;
+        }
+        // 设置PTE_W位
         
-        // }
 
     } else {
         printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
