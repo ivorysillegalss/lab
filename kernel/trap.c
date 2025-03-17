@@ -108,31 +108,33 @@ void usertrap(void) {
         syscall();
     } else if ((which_dev = devintr()) != 0) {
         // ok
-    } else if ((r_scause() == 13) && (*p->pagetable & PTE_C) == 1) {
+    } else if (r_scause() == 13) {
         // COW页面错误 在此分配新页面
-        pagetable_t pte = p->pagetable;
-        uint64 sz = p->sz;
-        PTE_RCSUB(*pte);
-        // 如果原页面已经没有被引用 或溢出 删除
-        // 如果原来的页面只剩一次引用 恢复回原来的位
-        if (PTE_RC(*pte) == 1) {
-            *pte |= PTE_W;
-            *pte &= ~PTE_C;
-            uvmunmap(pte, 0, PGROUNDUP(sz) / PGSIZE, 1);
-        }
 
-        // TODO
-        // 分配新页面 并且分配PTE_W位
-        uint64 pa = PTE2PA(*pte);
-        uint flags = PTE_FLAGS(*pte);
-        // 循环分配页表空间
-        char* mem;
-        if ((mem = kalloc()) == 0) {
-            // uvmunmap(mem, 0, i / PGSIZE, 1);
-            return -1;
+        uint64 err_vaddr = PGROUNDDOWN(r_stval());
+        pagetable_t up_pte = p->pagetable;
+        pte_t* pte = walkpte(p->pagetable, err_vaddr);
+
+        if (*p->pagetable & PTE_C) {
+            uint64 err_paddr = PTE2PA((uint64)*pte);
+            if (err_paddr == 0) {
+                printf("usertrap : err_vaddr: %p\n", err_vaddr);
+                panic("usertrap: fail to walkaddr! \n");
+            }
+
+            // 分配新页面 并且分配PTE_W位
+            char* page = kalloc();
+            if (page == 0) {
+                // 没内存kill掉当前线程
+                printf("usertrap(): Fail to allocate physical page.\n");
+                p->killed = 1;
+            } else {
+                uvmunmap(p->pagetable, err_vaddr, PGSIZE, 1);
+                memmove((char*)page, (char*)err_paddr, PGSIZE);
+                uint64 flags = (PTE_FLAGS((uint64)(*pte)) | PTE_W & (~PTE_C));
+                *pte = PA2PTE((uint64)page) | flags;
+            }
         }
-        // 设置PTE_W位
-        
 
     } else {
         printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);

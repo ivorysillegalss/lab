@@ -102,18 +102,37 @@ uint64 walkaddr(pagetable_t pagetable, uint64 va) {
         return 0;
 
     pte = walk(pagetable, va, 0);
-    if (pte == 0)
+    if (pte == 0) {
+        printf("walkpte: pte don't exist. \n");
         return 0;
-    if ((*pte & PTE_V) == 0)
+    }
+    if ((*pte & PTE_V) == 0) {
+        printf("walkpte: pte don't valid. \n");
         return 0;
-    if ((*pte & PTE_U) == 0)
+    }
+    if ((*pte & PTE_U) == 0) {
+        printf("walkaddr: pte don't valid. \n");
         return 0;
+    }
     pa = PTE2PA(*pte);
     return pa;
 }
 
 pte_t* walkpte(pagetable_t pagetable, uint64 va) {
-    return walk(pagetable, va, 0);
+    pte_t* pte = walk(pagetable, va, 0);
+    if (pte == 0) {
+        printf("walkpte: pte don't exist. \n");
+        return 0;
+    }
+    if ((*pte & PTE_V) == 0) {
+        printf("walkpte: pte don't valid. \n");
+        return 0;
+    }
+    if ((*pte & PTE_U) == 0) {
+        printf("walkpte: pte don't valid. \n");
+        return 0;
+    }
+    return pte;
 }
 
 // add a mapping to the kernel page table.
@@ -324,6 +343,7 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz) {
     pte_t* pte;
     uint64 i;
 
+    // 策略模式开or关cow todo
     // uint64 pa, i;
     // uint flags;
     // char* mem;
@@ -352,28 +372,24 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz) {
             panic("uvmcopy: pte should exist");
         if ((*pte & PTE_V) == 0)
             panic("uvmcopy: page not present");
-        // 如果有W位的话 清除 标记上COW位
-        if ((*pte & PTE_W) == 1) {
-
-            // 获取子进程的页表项（需确保子进程页表已分配）
-            pte_t* pte_child =
-                walk(new, i, 1);  // 第三个参数为1表示必要时创建页表项
-            if (!pte_child)
-                panic("uvmcopy: failed to map child PTE");
-
-            *pte |= PTE_C;
-            *pte &= ~PTE_W;
-            uint64 pa = PTE2PA(*pte);
-            uint flags = PTE_FLAGS(*pte);
-
-            *pte = PA2PTE(pa) | flags;
-            *pte_child = PA2PTE(pa) | flags;
-
-            PTE_RCINC(*pte);
+        // 将最低级的页表 清除W位 标记上COW位
+        extern char end[];
+        pte_t* pte = walk(old, i, 0);
+        uint64 pa = (uint64)PTE2PA((uint64)(*pte));
+        uint32 index = (pa - PGROUNDUP((uint64)end)) / PGSIZE;
+        // 在现有的引用次数上++
+        PTE_RCINC(*pte);
+        *pte |= PTE_C;
+        *pte &= ~PTE_W;
+        uint64 flags = PTE_FLAGS(*pte);
+        if (mappges(new, i, PGSIZE, pa, flags) != 0) {
+            panic("uvmcopy: failed to copy parent physical address");
         }
-        // 如果无W位 但是有C位 代表目前已经是在COW当中 在现有的引用次数上++
-        else if ((*pte & PTE_C) == 1) {
-            PTE_RCINC(*pte);
+
+        // 如果未被fork过 需要清楚写标志位 打上COW
+        if ((*pte & PTE_C) == 0) {
+            // *pte |= PTE_C;
+            *pte &= ~PTE_W;
         }
     }
 
@@ -416,6 +432,19 @@ int copyout(pagetable_t pagetable, uint64 dstva, char* src, uint64 len) {
         pa0 = walkaddr(pagetable, va0);
         if (pa0 == 0)
             return -1;
+        uint64* pte = walkaddr(pagetable, va0);
+        if (*pte & PTE_C) {
+            char* page = kalloc();
+            if (page == 0) {
+                panic("copyout: fail to allocate page.\n");
+            } else {
+                uint64 flags = (PTE_FLAGS((uint64)(*pte)) | PTE_W) & ~PTE_C;
+                memmove((char*)page, (char*)pa0, PGSIZE);
+                uvmunmap(pagetable, va0, PGSIZE, 1);
+                *pte = PA2PTE((uint64)page) | flags;
+                pa0 = (uint64)page;
+            }
+        }
         // 计算复制的字节数
         n = PGSIZE - (dstva - va0);
         if (n > len)
