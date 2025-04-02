@@ -112,7 +112,7 @@ void usertrap(void) {
         // COW页面错误 在此分配新页面
 
         uint64 err_vaddr = PGROUNDDOWN(r_stval());
-        pagetable_t up_pte = p->pagetable;
+        // pagetable_t up_pte = p->pagetable;
         pte_t* pte = walkpte(p->pagetable, err_vaddr);
 
         if (*p->pagetable & PTE_C) {
@@ -131,7 +131,7 @@ void usertrap(void) {
             } else {
                 uvmunmap(p->pagetable, err_vaddr, PGSIZE, 1);
                 memmove((char*)page, (char*)err_paddr, PGSIZE);
-                uint64 flags = (PTE_FLAGS((uint64)(*pte)) | PTE_W & (~PTE_C));
+                uint64 flags = ((PTE_FLAGS((uint64)(*pte)) | PTE_W) & (~PTE_C));
                 *pte = PA2PTE((uint64)page) | flags;
             }
         }

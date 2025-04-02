@@ -9,7 +9,7 @@
       "args": [],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}",
-      "miDebuggerServerAddress": "localhost:26000",
+      "miDebuggerServerAddress": "localhost:25000",
       // "miDebuggerPath": "/usr/local/bin/riscv64-unknown-elf-gdb",
       "miDebuggerPath": "/usr/bin/gdb-multiarch",
       // "miDebuggerPath": "/usr/bin/gcc-riscv64-linux-gnu",

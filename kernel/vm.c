@@ -373,16 +373,16 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz) {
         if ((*pte & PTE_V) == 0)
             panic("uvmcopy: page not present");
         // 将最低级的页表 清除W位 标记上COW位
-        extern char end[];
+        // extern char end[];
         pte_t* pte = walk(old, i, 0);
         uint64 pa = (uint64)PTE2PA((uint64)(*pte));
-        uint32 index = (pa - PGROUNDUP((uint64)end)) / PGSIZE;
+        // uint32 index = (pa - PGROUNDUP((uint64)end)) / PGSIZE;
         // 在现有的引用次数上++
         PTE_RCINC(*pte);
         *pte |= PTE_C;
         *pte &= ~PTE_W;
         uint64 flags = PTE_FLAGS(*pte);
-        if (mappges(new, i, PGSIZE, pa, flags) != 0) {
+        if (mappages(new, i, PGSIZE, pa, flags) != 0) {
             panic("uvmcopy: failed to copy parent physical address");
         }
 
@@ -432,16 +432,16 @@ int copyout(pagetable_t pagetable, uint64 dstva, char* src, uint64 len) {
         pa0 = walkaddr(pagetable, va0);
         if (pa0 == 0)
             return -1;
-        uint64* pte = walkaddr(pagetable, va0);
-        if (*pte & PTE_C) {
+        uint64 pte = walkaddr(pagetable, va0);
+        if (pte & PTE_C) {
             char* page = kalloc();
             if (page == 0) {
                 panic("copyout: fail to allocate page.\n");
             } else {
-                uint64 flags = (PTE_FLAGS((uint64)(*pte)) | PTE_W) & ~PTE_C;
+                uint64 flags = (PTE_FLAGS((uint64)(pte)) | PTE_W) & ~PTE_C;
                 memmove((char*)page, (char*)pa0, PGSIZE);
                 uvmunmap(pagetable, va0, PGSIZE, 1);
-                *pte = PA2PTE((uint64)page) | flags;
+                pte = PA2PTE((uint64)page) | flags;
                 pa0 = (uint64)page;
             }
         }

@@ -284,22 +284,22 @@ static inline uint64 r_fp() {
 #define PTE_FLAGS(pte) ((pte) & 0x3FF)
 
 // 获取当前的引用次数
-#define PTE_RC(pte) (((pte) >> 9) & 0x3)
+#define PTE_RC_GET(pte) (((pte) >> 9) & 0x3)
 
 // 在当前的引用次数基础上累加
-#define PTE_RCINC(pte)                        \
-    do {                                      \
-        uint32 cnt = (PTE_RC(pte) + 1) & 0x3; \
-        (pte) &= ~(0x3 << 9);                 \
-        (pte) |= (cnt << 9);                  \
+#define PTE_RCINC(pte)                            \
+    do {                                          \
+        uint32 cnt = (PTE_RC_GET(pte) + 1) & 0x3; \
+        (pte) &= ~(0x3 << 9);                     \
+        (pte) |= (cnt << 9);                      \
     } while (0)
 
 // 在当前的引用次数基础上减小
-#define PTE_RCSUB(pte)                        \
-    do {                                      \
-        uint32 cnt = (PTE_RC(pte) - 1) & 0x3; \
-        (pte) &= ~(0x3 << 9);                 \
-        (pte) |= (cnt << 9);                  \
+#define PTE_RCSUB(pte)                            \
+    do {                                          \
+        uint32 cnt = (PTE_RC_GET(pte) - 1) & 0x3; \
+        (pte) &= ~(0x3 << 9);                     \
+        (pte) |= (cnt << 9);                      \
     } while (0)
 
 // extract the three 9-bit page table indices from a virtual address.
