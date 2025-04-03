@@ -24,6 +24,27 @@ struct {
     struct run* freelist;
 } kmem;
 
+// 标识页被调用的次数
+uint page_refs[PHYSTOP >> 12];
+// 控制页调用的时候 所涉及到的并发锁
+struct spinlock refs_lock;
+
+void pin_page(uint32 index) {
+    acquire(&refs_lock);
+    page_refs[index]++;
+    release(&refs_lock);
+}
+
+void unpin_page(uint32 index) {
+    acquire(&refs_lock);
+    page_refs[index]--;
+    release(&refs_lock);
+}
+
+int get_page_ref(uint index) {
+    return page_refs[index];
+}
+
 void kinit() {
     initlock(&kmem.lock, "kmem");
     freerange(end, (void*)PHYSTOP);
@@ -32,8 +53,13 @@ void kinit() {
 void freerange(void* pa_start, void* pa_end) {
     char* p;
     p = (char*)PGROUNDUP((uint64)pa_start);
-    for (; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
+    for (; p + PGSIZE <= (char*)pa_end; p += PGSIZE) {
+        uint index = ((uint64)p - (uint64)pa_start) / PGSIZE;
+        acquire(&refs_lock);
+        page_refs[index] = 1;
+        release(&refs_lock);
         kfree(p);
+    }
 }
 
 // Free the page of physical memory pointed at by v,
@@ -45,6 +71,19 @@ void kfree(void* pa) {
 
     if (((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
         panic("kfree");
+
+    // 查看目标页的引用次数 大于1直接减 无需释放空间
+    uint32 index = ((uint64)pa - PGROUNDUP((uint64)end)) / PGSIZE;
+
+    if (get_page_ref(index) < 1) {
+        printf("kfree: refs: %d\n", get_page_ref(index));
+        panic("kfree: refs < 1.\n");
+    }
+
+    unpin_page(index);
+    int refs = get_page_ref(index);
+    if (refs > 0)
+        return;
 
     // Fill with junk to catch dangling refs.
     memset(pa, 1, PGSIZE);
@@ -67,8 +106,14 @@ void* kalloc(void) {
 
     acquire(&kmem.lock);
     r = kmem.freelist;
-    if (r)
+    if (r) {
+        // 分配新页面的时候 同时也需要分配对应的引用次数
         kmem.freelist = r->next;
+        uint32 index = ((uint64)r - PGROUNDUP((uint64)end)) / PGSIZE;
+        acquire(&refs_lock);
+        page_refs[index] = 1;
+        release(&refs_lock);
+    }
 
     freemem -= PGSIZE;
     release(&kmem.lock);

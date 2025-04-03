@@ -10,6 +10,7 @@ volatile static int started = 0;
 // start() jumps here in supervisor mode on all CPUs.
 void main() {
     if (cpuid() == 0) {
+        // 初始化uart硬件
         consoleinit();
         printfinit();
         printf("\n");

@@ -67,6 +67,8 @@ void* kalloc(void);
 void kfree(void*);
 void kinit(void);
 uint64 kgetmem(void);
+void pin_page(uint32);
+void unpin_page(uint32);
 
 // log.c
 void initlog(int, struct superblock*);
