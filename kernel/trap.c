@@ -106,6 +106,39 @@ void usertrap(void) {
 
         // 真正执行系统调用
         syscall();
+    } else if (r_scause() == 0xf) {
+        // r_scause 为 0xf的时候 是存储页错误
+        // 发生页错误，此时应当分配页进行重新映射，并添加写标志位
+        // 获取发生页错误的虚拟地址(错误页头部地址)
+        uint64 err_vaddr = PGROUNDDOWN(r_stval());
+        pte_t* err_pte;
+        err_pte = walkpte(p->pagetable, err_vaddr);
+        if (*err_pte & PTE_COW) {
+            uint64 err_paddr = PTE2PA((uint64)*err_pte);
+            // 如果翻译出来的地址是错误的
+            if (err_paddr == 0) {
+                printf("usertrap: err_vaddr: %p\n", err_vaddr);
+                p->killed = 1;
+                // panic("usertrap: fail to work");
+            }
+            char* page = kalloc();
+            // 如果没有足够的空间可以分配
+            if (page == 0) {
+                printf("usertrap: fail to allocate physical page.\n");
+                p->killed = 1;
+            } else {
+                // 成功分配了物理页 此时需要对他进行重新映射标志位
+                // （写上标志位 擦除COW标志位）
+                // 将原来的数据拷贝到新分配到页当中
+                memmove((char*)page, (char*)err_paddr, PGSIZE);
+                kfree((void*)err_paddr);
+                uint flags = PTE_FLAGS(*err_pte);
+                // 将发生错误的页解除引用
+                // uvmunmap(p->pagetable, err_vaddr, PGSIZE, 1);
+                *err_pte = PA2PTE(page) | flags | PTE_W;
+                *err_pte &= ~PTE_COW;
+            }
+        }
     } else if ((which_dev = devintr()) != 0) {
         // ok
     } else {
