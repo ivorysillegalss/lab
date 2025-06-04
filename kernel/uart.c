@@ -35,7 +35,6 @@
 #define LSR_RX_READY (1 << 0)    // input is waiting to be read from RHR
 #define LSR_TX_IDLE (1 << 5)     // THR can accept another character to send
 
-// 读，写宏 直接将对应的宏写入寄存器，从寄存器中读出
 #define ReadReg(reg) (*(Reg(reg)))
 #define WriteReg(reg, v) (*(Reg(reg)) = (v))
 
@@ -50,9 +49,6 @@ extern volatile int panicked;  // from printf.c
 
 void uartstart();
 
-// 硬件初始化
-// 禁用中断 设置比特率 配置数据结构 重置并启用FIFO 启用中断
-// 本质上就是通过设定的值写入指定寄存器中 注册给硬件 让硬件根据给定的参数进行启动
 void uartinit(void) {
     // disable interrupts.
     WriteReg(IER, 0x00);
@@ -85,7 +81,6 @@ void uartinit(void) {
 // because it may block, it can't be called
 // from interrupts; it's only suitable for use
 // by write().
-// 往控制台写字符
 void uartputc(int c) {
     acquire(&uart_tx_lock);
 
@@ -96,15 +91,12 @@ void uartputc(int c) {
 
     while (1) {
         if (uart_tx_w == uart_tx_r + UART_TX_BUF_SIZE) {
-            // 缓冲区满 锁住
             // buffer is full.
             // wait for uartstart() to open up space in the buffer.
             sleep(&uart_tx_r, &uart_tx_lock);
         } else {
-            // 将一个字符塞到uart缓冲区当中
             uart_tx_buf[uart_tx_w % UART_TX_BUF_SIZE] = c;
             uart_tx_w += 1;
-            // 修改偏移量 输出
             uartstart();
             release(&uart_tx_lock);
             return;
@@ -137,7 +129,6 @@ void uartputc_sync(int c) {
 // caller must hold uart_tx_lock.
 // called from both the top- and bottom-half.
 void uartstart() {
-    // 判断当前缓存区是否空或满
     while (1) {
         if (uart_tx_w == uart_tx_r) {
             // transmit buffer is empty.
@@ -151,12 +142,10 @@ void uartstart() {
             return;
         }
 
-        // 从 UART 传输缓冲区中取出一个字符发送给 UART 控制器
         int c = uart_tx_buf[uart_tx_r % UART_TX_BUF_SIZE];
         uart_tx_r += 1;
 
         // maybe uartputc() is waiting for space in the buffer.
-        // 唤醒线程 等待字符输入缓冲区当中 （如果之前缓冲区是满的话是sleep的 这里进行wakeup）
         wakeup(&uart_tx_r);
 
         WriteReg(THR, c);
@@ -166,7 +155,6 @@ void uartstart() {
 // read one input character from the UART.
 // return -1 if none is waiting.
 int uartgetc(void) {
-    // 从寄存器中读取中断输入的值
     if (ReadReg(LSR) & 0x01) {
         // input data is ready.
         return ReadReg(RHR);
@@ -178,15 +166,12 @@ int uartgetc(void) {
 // handle a uart interrupt, raised because input has
 // arrived, or the uart is ready for more output, or
 // both. called from trap.c.
-// uart中断时 所调用的代码
 void uartintr(void) {
     // read and process incoming characters.
     while (1) {
-        // 轮询读取值
         int c = uartgetc();
         if (c == -1)
             break;
-        // 控制条中断
         consoleintr(c);
     }
 

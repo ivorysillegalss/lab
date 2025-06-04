@@ -34,9 +34,6 @@ int fileread(struct file*, uint64, int n);
 int filestat(struct file*, uint64 addr);
 int filewrite(struct file*, uint64, int n);
 
-// info.c
-int ssinfo(uint64 addr);
-
 // fs.c
 void fsinit(int);
 int dirlink(struct inode*, char*, uint);
@@ -66,7 +63,6 @@ void ramdiskrw(struct buf*);
 void* kalloc(void);
 void kfree(void*);
 void kinit(void);
-uint64 kgetmem(void);
 
 // log.c
 void initlog(int, struct superblock*);
@@ -84,7 +80,6 @@ int pipewrite(struct pipe*, uint64, int);
 void printf(char*, ...);
 void panic(char*) __attribute__((noreturn));
 void printfinit(void);
-void backtrace(void);
 
 // proc.c
 int cpuid(void);
@@ -109,10 +104,6 @@ void yield(void);
 int either_copyout(int user_dst, uint64 dst, void* src, uint64 len);
 int either_copyin(void* dst, int user_src, uint64 src, uint64 len);
 void procdump(void);
-int get_proc_cnt(int);
-uint64 getunusedproc(void);
-int isaccessed(uint64, int, uint64);
-void load_userregister(struct proc*);
 
 // swtch.S
 void swtch(struct context*, struct context*);
@@ -179,8 +170,6 @@ uint64 walkaddr(pagetable_t, uint64);
 int copyout(pagetable_t, uint64, char*, uint64);
 int copyin(pagetable_t, char*, uint64, uint64);
 int copyinstr(pagetable_t, char*, uint64, uint64);
-void vmprint(pagetable_t, uint);
-pte_t* walkpte(pagetable_t pagetable, uint64 va);
 
 // plic.c
 void plicinit(void);

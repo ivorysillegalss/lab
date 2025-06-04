@@ -122,21 +122,3 @@ void printfinit(void) {
     initlock(&pr.lock, "pr");
     pr.locking = 1;
 }
-
-void backtrace(void) {
-    printf("backtrace:\n");
-    
-    // 获取当前栈内的fp （上一个调用者栈内的栈指针）
-    uint64 fp = r_fp();
-    uint64 bottom = PGROUNDDOWN(fp);
-    uint64 top = PGROUNDUP(fp);
-
-    //超出当前栈默认遍历完毕
-    // 具体可参见xv6中的栈结构 fp中存储的是上一个调用者的指针位置 类比链表树
-    // 所以可以直接通过这个fp索引并且打印调用链
-    while (fp >= bottom && fp < top) {
-        printf("%p\n",  *(uint64*)(fp - 8));
-        fp = *(uint64*)(fp - 16);
-    }
-    return;
-}

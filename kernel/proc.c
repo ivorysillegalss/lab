@@ -93,11 +93,6 @@ int allocpid() {
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
 // If there are no free procs, or a memory allocation fails, return 0.
-// -------------------------------------------------------
-// 遍历进程表 悲观锁方式 抽取线程判断是否使用过
-// 符合条件 goto 找到分支
-// 不符合条件 放锁return0 标识找不到
-// 分配进程空间 这里的某些操作和thread create中的操作本质上是相似的
 static struct proc* allocproc(void) {
     struct proc* p;
 
@@ -115,14 +110,6 @@ found:
     p->pid = allocpid();
     p->state = USED;
 
-    // 为内核/用户空间共享内存板块 usyscallInfo 分配内存
-    if ((p->usyscall_info = (struct usyscall*)kalloc()) == 0) {
-        freeproc(p);
-        release(&p->lock);
-        return 0;
-    }
-    p->usyscall_info->pid = p->pid;
-
     // Allocate a trapframe page.
     if ((p->trapframe = (struct trapframe*)kalloc()) == 0) {
         freeproc(p);
@@ -138,26 +125,11 @@ found:
         return 0;
     }
 
-    if ((p->sigcontext = (struct sigcontext*)kalloc()) == 0) {
-        freeproc(p);
-        release(&p->lock);
-        return 0;
-    }
-
     // Set up new context to start executing at forkret,
     // which returns to user space.
-    // 设置线程的上下文 同时设置ra和sp 记录当前的一个执行的位置（栈顶）以及定时器中断时候跳转的位置
     memset(&p->context, 0, sizeof(p->context));
     p->context.ra = (uint64)forkret;
     p->context.sp = p->kstack + PGSIZE;
-
-    // 为alarm函数分配空间
-    // memset(&p->sigcontext, 0, sizeof(p->sigcontext));
-    // p->sigcontext->alramtick = 0;
-    // p->sigcontext->ticks = 0;
-    // p->sigcontext->handler = 0;
-
-    memset(&p->sigregister, 0, sizeof(p->sigregister));
 
     return p;
 }
@@ -165,12 +137,10 @@ found:
 // free a proc structure and the data hanging from it,
 // including user pages.
 // p->lock must be held.
-// 回收空间 防止内存泄漏等问题
 static void freeproc(struct proc* p) {
     if (p->trapframe)
         kfree((void*)p->trapframe);
     p->trapframe = 0;
-    // 解除虚拟内存和物理内存之间的映射
     if (p->pagetable)
         proc_freepagetable(p->pagetable, p->sz);
     p->pagetable = 0;
@@ -182,11 +152,6 @@ static void freeproc(struct proc* p) {
     p->killed = 0;
     p->xstate = 0;
     p->state = UNUSED;
-    p->trace_mask = 0;
-    if (p->usyscall_info) {
-        kfree((void*)p->usyscall_info);
-    }
-    p->usyscall_info = 0;
 }
 
 // Create a user page table for a given process,
@@ -217,17 +182,6 @@ pagetable_t proc_pagetable(struct proc* p) {
         return 0;
     }
 
-    // 在虚拟内存和物理内存间 映射usyscall
-    // 如果映射失败了 需要将之前成功的分配记录回滚 恢复现场
-    if (mappages(pagetable, USYSCALL, PGSIZE, (uint64)(p->usyscall_info),
-                 PTE_R | PTE_U) < 0) {
-        uvmfree(pagetable, 0);
-        // 回滚之前成功的TRAMPOLINE和TRAPFRAME间的映射
-        uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-        uvmunmap(pagetable, TRAPFRAME, 1, 0);
-        return 0;
-    }
-
     return pagetable;
 }
 
@@ -236,7 +190,6 @@ pagetable_t proc_pagetable(struct proc* p) {
 void proc_freepagetable(pagetable_t pagetable, uint64 sz) {
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
     uvmunmap(pagetable, TRAPFRAME, 1, 0);
-    uvmunmap(pagetable, USYSCALL, 1, 0);
     uvmfree(pagetable, sz);
 }
 
@@ -250,22 +203,17 @@ uchar initcode[] = {0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02, 0x97,
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 // Set up first user process.
-// 初始化操作系统启动后 用户空间的第一个进程 等待调度器的调度
 void userinit(void) {
     struct proc* p;
 
-    // 抽取空闲进程资源
     p = allocproc();
     initproc = p;
 
     // allocate one user page and copy init's instructions
     // and data into it.
-    // 分配并将初始化的代码内容赋值到代码的页表当中
     uvminit(p->pagetable, initcode, sizeof(initcode));
-    // 设置页初始大小
     p->sz = PGSIZE;
 
-    // 配置trapframe 内核用户空间切换段落
     // prepare for the very first "return" from kernel to user.
     p->trapframe->epc = 0;      // user program counter
     p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -273,7 +221,6 @@ void userinit(void) {
     safestrcpy(p->name, "initcode", sizeof(p->name));
     p->cwd = namei("/");
 
-    // 设置运行状态
     p->state = RUNNABLE;
 
     release(&p->lock);
@@ -322,9 +269,6 @@ int fork(void) {
 
     // Cause fork to return 0 in the child.
     np->trapframe->a0 = 0;
-
-    // 父子进程复制跟踪掩码
-    np->trace_mask = p->trace_mask;
 
     // increment reference counts on open file descriptors.
     for (i = 0; i < NOFILE; i++)
@@ -460,9 +404,6 @@ int wait(uint64 addr) {
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
-// 调度器线程所执行的schedule函数 当线程执行上下文切换的时候
-// 是先从当前要退出的线程切换到 调度器线程
-// 然后再从调度器线程切换到 下一个想要运行的线程
 void scheduler(void) {
     struct proc* p;
     struct cpu* c = mycpu();
@@ -480,15 +421,12 @@ void scheduler(void) {
                 // before jumping back to us.
                 p->state = RUNNING;
                 c->proc = p;
-                // 切换到调度器线程的时候 会直接跳到这里来
                 swtch(&c->context, &p->context);
 
                 // Process is done running for now.
                 // It should have changed its p->state before coming back.
-                // 表示当前已经切换到了 调度器线程当中 未免引起混乱
                 c->proc = 0;
             }
-            // 释放在yield的时候就上的锁
             release(&p->lock);
         }
     }
@@ -501,7 +439,6 @@ void scheduler(void) {
 // be proc->intena and proc->noff, but that would
 // break in the few places where a lock is held but
 // there's no process.
-// 线程进行上下文的时候执行函数 改变函数当前的运行状态
 void sched(void) {
     int intena;
     struct proc* p = myproc();
@@ -515,16 +452,12 @@ void sched(void) {
     if (intr_get())
         panic("sched interruptible");
 
-    // 关闭中断 在线程切换时已经切换走的时候 该线程不允许中断
     intena = mycpu()->intena;
-    // 切换调度器线程 见swich.s 函数执行完这里就会直接跳过去运行了调度器线程
     swtch(&p->context, &mycpu()->context);
-    // 运行到最后一行代码的时机，是已经下一次轮到当前线程调度了。此时才允许中断 打开中断
     mycpu()->intena = intena;
 }
 
 // Give up the CPU for one scheduling round.
-// 主动让出线程 加线程颗粒度锁
 void yield(void) {
     struct proc* p = myproc();
     acquire(&p->lock);
@@ -535,7 +468,6 @@ void yield(void) {
 
 // A fork child's very first scheduling by scheduler()
 // will swtch to forkret.
-// 调度器线程的设置
 void forkret(void) {
     static int first = 1;
 
@@ -543,7 +475,6 @@ void forkret(void) {
     release(&myproc()->lock);
 
     if (first) {
-        // 初始化文件系统
         // File system initialization must be run in the context of a
         // regular process (e.g., because it calls sleep), and thus cannot
         // be run from main().
@@ -670,97 +601,4 @@ void procdump(void) {
         printf("%d %s %s", p->pid, state, p->name);
         printf("\n");
     }
-}
-
-// 获取各种状态的线程的数量
-int get_proc_cnt(int proc_state) {
-    int cnt = 0;
-    struct proc* p;
-    for (p = proc; p < &proc[NPROC]; p++) {
-        if (p->state == proc_state) {
-            cnt++;
-        }
-    }
-    return cnt;
-}
-
-// TODO 修改逻辑与上面合并 统一维护值
-uint64 getunusedproc(void) {
-    uint64 cnt = 0;
-    struct proc* p;
-    for (p = proc; p < &proc[NPROC]; p++) {
-        if (p->state != UNUSED) {
-            cnt++;
-        }
-    }
-    return cnt;
-}
-
-int ceildivide(int a, int b) {
-    if (a % b == 0) {
-        return a / b;
-    }
-    return a / b + 1;
-}
-
-int isaccessed(uint64 start_address, int page_nums, uint64 bit_mask) {
-    struct proc* p = myproc();
-
-    uint8 bitmask[ceildivide(page_nums, 8)];
-    memset(bitmask, 0, sizeof(bitmask));
-
-    for (int i = 0; i < page_nums; i++) {
-        uint64 addr = start_address + i * PGSIZE;
-        if (addr > MAXVA)
-            return -1;
-
-        pte_t* pte = walkpte(p->pagetable, addr);
-        if (pte && (*pte & PTE_V) && (*pte & PTE_A)) {
-            bitmask[i / 8] |= (1 << (i % 8));
-            *pte &= ~PTE_A;
-        }
-    }
-    if (copyout(p->pagetable, bit_mask, (char*)&bitmask, sizeof(bitmask)) < 0) {
-        return -1;
-    }
-    return 0;
-}
-
-void load_userregister(struct proc* p) {
-    struct sigregister* s = &p->sigregister;
-    struct trapframe* t = p->trapframe;
-
-    t->ra = s->ra;
-    t->sp = s->sp;
-    t->gp = s->gp;
-    t->tp = s->tp;
-    t->t0 = s->t0;
-    t->t1 = s->t1;
-    t->t2 = s->t2;
-    t->s0 = s->s0;
-    t->s1 = s->s1;
-    t->a0 = s->a0;
-    t->a1 = s->a1;
-    t->a2 = s->a2;
-    t->a3 = s->a3;
-    t->a4 = s->a4;
-    t->a5 = s->a5;
-    t->a6 = s->a6;
-    t->a7 = s->a7;
-    t->s2 = s->s2;
-    t->s3 = s->s3;
-    t->s4 = s->s4;
-    t->s5 = s->s5;
-    t->s6 = s->s6;
-    t->s7 = s->s7;
-    t->s8 = s->s8;
-    t->s9 = s->s9;
-    t->s10 = s->s10;
-    t->s11 = s->s11;
-    t->t3 = s->t3;
-    t->t4 = s->t4;
-    t->t5 = s->t5;
-    t->t6 = s->t6;
-
-    return;
 }

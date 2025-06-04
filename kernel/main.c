@@ -6,11 +6,9 @@
 
 volatile static int started = 0;
 
-// 在start.c中 machine mode 转交权限后 就直接jump到了这里
 // start() jumps here in supervisor mode on all CPUs.
 void main() {
     if (cpuid() == 0) {
-        // 初始化uart硬件
         consoleinit();
         printfinit();
         printf("\n");
@@ -28,7 +26,6 @@ void main() {
         iinit();             // inode table
         fileinit();          // file table
         virtio_disk_init();  // emulated hard disk
-        // 第一个用户空间的进程
         userinit();          // first user process
         __sync_synchronize();
         started = 1;

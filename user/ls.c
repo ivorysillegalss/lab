@@ -3,8 +3,6 @@
 #include "user/user.h"
 #include "kernel/fs.h"
 
-// xv6中 相关的文件名如果没到14个字节（宏定义） 是会手动补充固定至14个字节的 使用'\0'
-// 然后遍历字符串的时候 直接从头开始遍历 遇到第一个就直接结束
 char* fmtname(char* path) {
     static char buf[DIRSIZ + 1];
     char* p;
@@ -52,15 +50,11 @@ void ls(char* path) {
             strcpy(buf, path);
             p = buf + strlen(buf);
             *p++ = '/';
-
             while (read(fd, &de, sizeof(de)) == sizeof(de)) {
-                // 如果目录项无用 则跳过
                 if (de.inum == 0)
                     continue;
-
-                memmove(p, de.name, DIRSIZ);  // 将文件名与目标路径拼接
+                memmove(p, de.name, DIRSIZ);
                 p[DIRSIZ] = 0;
-
                 if (stat(buf, &st) < 0) {
                     printf("ls: cannot stat %s\n", buf);
                     continue;
