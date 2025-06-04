@@ -10,10 +10,33 @@
 #define STACK_SIZE 8192
 #define MAX_THREAD 4
 
-struct thread {
-    char stack[STACK_SIZE]; /* the thread's stack */
-    int state;              /* FREE, RUNNING, RUNNABLE */
+struct tcontext {
+    uint64 ra;
+    uint64 sp;
+
+    // callee-saved
+    uint64 s0;
+    uint64 s1;
+    uint64 s2;
+    uint64 s3;
+    uint64 s4;
+    uint64 s5;
+    uint64 s6;
+    uint64 s7;
+    uint64 s8;
+    uint64 s9;
+    uint64 s10;
+    uint64 s11;
 };
+
+struct thread {
+    char stack[STACK_SIZE];   /* the thread's stack */
+    int state;                /* FREE, RUNNING, RUNNABLE */
+    struct tcontext context;  // 每个线程的独立上下文
+};
+
+// 数组空间在静态内存中分配 在编译时就已经固定好了内存结构 不会动态变化
+// （为每个线程设计独立的栈空间）
 struct thread all_thread[MAX_THREAD];
 struct thread* current_thread;
 extern void thread_switch(uint64, uint64);
@@ -53,14 +76,14 @@ void thread_schedule(void) {
         next_thread->state = RUNNING;
         t = current_thread;
         current_thread = next_thread;
-        /* YOUR CODE HERE
-     * Invoke thread_switch to switch from t to next_thread:
-     * thread_switch(??, ??);
-     */
+        // 在这里完成进程内线程的上下文切换 保存寄存器的状态
+        thread_switch((uint64)&t->context, (uint64)&current_thread->context);
     } else
         next_thread = 0;
 }
 
+// 创建初始化线程 这里可以类比进程创建时的操作
+// 创建新进程的时候也同样需要初始化对应的寄存器 可见allocproc()
 void thread_create(void (*func)()) {
     struct thread* t;
 
@@ -69,7 +92,8 @@ void thread_create(void (*func)()) {
             break;
     }
     t->state = RUNNABLE;
-    // YOUR CODE HERE
+    t->context.ra = (uint64)func;
+    t->context.sp = (uint64)t->stack + STACK_SIZE;
 }
 
 void thread_yield(void) {

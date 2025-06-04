@@ -97,6 +97,7 @@ int allocpid() {
 // 遍历进程表 悲观锁方式 抽取线程判断是否使用过
 // 符合条件 goto 找到分支
 // 不符合条件 放锁return0 标识找不到
+// 分配进程空间 这里的某些操作和thread create中的操作本质上是相似的
 static struct proc* allocproc(void) {
     struct proc* p;
 
