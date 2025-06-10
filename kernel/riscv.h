@@ -265,15 +265,16 @@ static inline uint64 r_fp() {
 #define PGROUNDUP(sz) (((sz) + PGSIZE - 1) & ~(PGSIZE - 1))
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE - 1))
 
-#define PTE_V (1L << 0)    // valid
-#define PTE_R (1L << 1)    // read
-#define PTE_W (1L << 2)    // write
-#define PTE_X (1L << 3)    // execute
-#define PTE_U (1L << 4)    // 1 -> user can access
-#define PTE_G (1L << 5)    // global 全局映射位 不会因进程切换而失效
-#define PTE_A (1L << 6)    // accessed 访问位
-#define PTE_D (1L << 7)    // dirty 脏页位 需写回刷新
-#define PTE_COW (1L << 8)  // COW位
+#define PTE_V (1L << 0)   // valid
+#define PTE_R (1L << 1)   // read
+#define PTE_W (1L << 2)   // write
+#define PTE_X (1L << 3)   // execute
+#define PTE_U (1L << 4)   // 1 -> user can access
+#define PTE_G (1L << 5)   // global 全局映射位 不会因进程切换而失效
+#define PTE_A (1L << 6)   // accessed 访问位
+#define PTE_D (1L << 7)   // dirty 脏页位 需写回刷新
+#define PTE_C (1L << 8)   // 表示当前为COPYONWRITE场景下变为只读
+#define PTE_RC (1L << 9)  // Reference Counting 计算页面的引用次数 使用两位 4次
 
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)
@@ -281,6 +282,25 @@ static inline uint64 r_fp() {
 #define PTE2PA(pte) (((pte) >> 10) << 12)
 
 #define PTE_FLAGS(pte) ((pte) & 0x3FF)
+
+// 获取当前的引用次数
+#define PTE_RC_GET(pte) (((pte) >> 9) & 0x3)
+
+// 在当前的引用次数基础上累加
+#define PTE_RCINC(pte)                            \
+    do {                                          \
+        uint32 cnt = (PTE_RC_GET(pte) + 1) & 0x3; \
+        (pte) &= ~(0x3 << 9);                     \
+        (pte) |= (cnt << 9);                      \
+    } while (0)
+
+// 在当前的引用次数基础上减小
+#define PTE_RCSUB(pte)                            \
+    do {                                          \
+        uint32 cnt = (PTE_RC_GET(pte) - 1) & 0x3; \
+        (pte) &= ~(0x3 << 9);                     \
+        (pte) |= (cnt << 9);                      \
+    } while (0)
 
 // extract the three 9-bit page table indices from a virtual address.
 #define PXMASK 0x1FF  // 9 bits

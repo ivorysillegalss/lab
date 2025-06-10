@@ -102,18 +102,37 @@ uint64 walkaddr(pagetable_t pagetable, uint64 va) {
         return 0;
 
     pte = walk(pagetable, va, 0);
-    if (pte == 0)
+    if (pte == 0) {
+        printf("walkpte: pte don't exist. \n");
         return 0;
-    if ((*pte & PTE_V) == 0)
+    }
+    if ((*pte & PTE_V) == 0) {
+        printf("walkpte: pte don't valid. \n");
         return 0;
-    if ((*pte & PTE_U) == 0)
+    }
+    if ((*pte & PTE_U) == 0) {
+        printf("walkaddr: pte don't valid. \n");
         return 0;
+    }
     pa = PTE2PA(*pte);
     return pa;
 }
 
 pte_t* walkpte(pagetable_t pagetable, uint64 va) {
-    return walk(pagetable, va, 0);
+    pte_t* pte = walk(pagetable, va, 0);
+    if (pte == 0) {
+        printf("walkpte: pte don't exist. \n");
+        return 0;
+    }
+    if ((*pte & PTE_V) == 0) {
+        printf("walkpte: pte don't valid. \n");
+        return 0;
+    }
+    if ((*pte & PTE_U) == 0) {
+        printf("walkpte: pte don't valid. \n");
+        return 0;
+    }
+    return pte;
 }
 
 // add a mapping to the kernel page table.
@@ -321,34 +340,66 @@ void uvmfree(pagetable_t pagetable, uint64 sz) {
 // physical memory.
 // returns 0 on success, -1 on failure.
 // frees any allocated pages on failure.
+// sz代表当前进程（程序）已分配的最后一个地址 表示当前进程所能申请到的最大范围（当前进程占用的总空间大小）
 int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz) {
-    // 父进程页表指针拷贝到子进程中
-    // 所有页表设置为不可写
-    for (uint64 vaddr = 0; vaddr < sz; vaddr += PGSIZE) {
-        // 将最低级的页表加上COW标识符
-        // 擦去写标志位即可
-        pte_t* pte = walk(old, vaddr, 0);
-        if (pte == 0) {
-            panic("uvmcopy: pte should exist.\n");
-        }
+    pte_t* pte;
+    uint64 i;
+
+    // 策略模式开or关cow todo
+    // uint64 pa, i;
+    // uint flags;
+    // char* mem;
+
+    // 这里通过虚拟内存的最高地址(sz) 并且由于虚拟地址是顺序写的
+    // 所以通过这个循环遍历就复制父进程原所有数据
+    // for (i = 0; i < sz; i += PGSIZE) {
+    //     if ((pte = walk(old, i, 0)) == 0)
+    //         panic("uvmcopy: pte should exist");
+    //     if ((*pte & PTE_V) == 0)
+    //         panic("uvmcopy: page not present");
+    //     pa = PTE2PA(*pte);
+    //     flags = PTE_FLAGS(*pte);
+    //     if ((mem = kalloc()) == 0)
+    //         goto err;
+    //     memmove(mem, (char*)pa, PGSIZE);
+    //     if (mappages(new, i, PGSIZE, (uint64)mem, flags) != 0) {
+    //         kfree(mem);
+    //         goto err;
+    //     }
+    // }
+
+    // 通过CopyOnWrite修改后的思路 遍历的时候 如果有PTE_W位 清除 并且打上PTE_C位
+    for (i = 0; i < sz; i += PGSIZE) {
+        if ((pte = walk(old, i, 0)) == 0)
+            panic("uvmcopy: pte should exist");
+        if ((*pte & PTE_V) == 0)
+            panic("uvmcopy: page not present");
+        // 将最低级的页表 清除W位 标记上COW位
+        // extern char end[];
+        pte_t* pte = walk(old, i, 0);
         uint64 pa = (uint64)PTE2PA((uint64)(*pte));
-        extern char end[];
-        uint32 index = (pa - PGROUNDUP((uint64)end)) / PGSIZE;
-        pin_page(index);
-        uint64 flags = (PTE_FLAGS((uint64)(*pte)) | PTE_COW) & ~PTE_W;
-        if (mappages(new, vaddr, PGSIZE, pa, flags) != 0) {
-            panic("uvmcopy: fail to copy parent physical address.\n");
+        // uint32 index = (pa - PGROUNDUP((uint64)end)) / PGSIZE;
+        // 在现有的引用次数上++
+        PTE_RCINC(*pte);
+        *pte |= PTE_C;
+        *pte &= ~PTE_W;
+        uint64 flags = PTE_FLAGS(*pte);
+        if (mappages(new, i, PGSIZE, pa, flags) != 0) {
+            panic("uvmcopy: failed to copy parent physical address");
         }
 
-        // 如果没有cow位 代表此时是第一次上COW位 加上cow标识符
-        if (!(*pte & PTE_COW)) {
-            // 加上COW标识符
-            *pte |= PTE_COW;
-            // 清除写标志位
-            *pte &= ~(PTE_W);
+        // 如果未被fork过 需要清楚写标志位 打上COW
+        if ((*pte & PTE_C) == 0) {
+            // *pte |= PTE_C;
+            *pte &= ~PTE_W;
         }
     }
+
     return 0;
+
+    // err:
+    //     uvmunmap(new, 0, i / PGSIZE, 1);
+    //     return -1;
 }
 
 // mark a PTE invalid for user access.
@@ -392,21 +443,17 @@ int copyout(pagetable_t pagetable, uint64 dstva, char* src, uint64 len) {
         uint64 pa = PTE2PA((uint64)(*pte));
         if (pa == 0) {
             return -1;
-        }
-        if (*pte & PTE_COW) {
+        uint64 pte = walkaddr(pagetable, va0);
+        if (pte & PTE_C) {
             char* page = kalloc();
             if (page == 0) {
-                panic("uvmcopy: fail to allocate page");
-                // return -1;
+                panic("copyout: fail to allocate page.\n");
             } else {
-                // uint64 flags = (PTE_FLAGS((uint64)(*pte)) | PTE_W) & ~PTE_COW;
-                memmove((char*)page, (char*)pa, PGSIZE);
-                uint flags = PTE_FLAGS(*pte);
-                // uvmunmap(pagetable, va0, PGSIZE, 1);
-                uvmunmap(pagetable, va0, 1, 1);
-                *pte = PA2PTE((uint64)page) | flags | PTE_W;
-                *pte &= ~PTE_COW;
-                pa = (uint64)page;
+                uint64 flags = (PTE_FLAGS((uint64)(pte)) | PTE_W) & ~PTE_C;
+                memmove((char*)page, (char*)pa0, PGSIZE);
+                uvmunmap(pagetable, va0, PGSIZE, 1);
+                pte = PA2PTE((uint64)page) | flags;
+                pa0 = (uint64)page;
             }
         }
         // 计算复制的字节数

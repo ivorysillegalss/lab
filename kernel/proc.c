@@ -97,6 +97,7 @@ int allocpid() {
 // 遍历进程表 悲观锁方式 抽取线程判断是否使用过
 // 符合条件 goto 找到分支
 // 不符合条件 放锁return0 标识找不到
+// 分配进程空间 这里的某些操作和thread create中的操作本质上是相似的
 static struct proc* allocproc(void) {
     struct proc* p;
 
@@ -145,6 +146,7 @@ found:
 
     // Set up new context to start executing at forkret,
     // which returns to user space.
+    // 设置线程的上下文 同时设置ra和sp 记录当前的一个执行的位置（栈顶）以及定时器中断时候跳转的位置
     memset(&p->context, 0, sizeof(p->context));
     p->context.ra = (uint64)forkret;
     p->context.sp = p->kstack + PGSIZE;
@@ -458,6 +460,9 @@ int wait(uint64 addr) {
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+// 调度器线程所执行的schedule函数 当线程执行上下文切换的时候
+// 是先从当前要退出的线程切换到 调度器线程
+// 然后再从调度器线程切换到 下一个想要运行的线程
 void scheduler(void) {
     struct proc* p;
     struct cpu* c = mycpu();
@@ -475,12 +480,15 @@ void scheduler(void) {
                 // before jumping back to us.
                 p->state = RUNNING;
                 c->proc = p;
+                // 切换到调度器线程的时候 会直接跳到这里来
                 swtch(&c->context, &p->context);
 
                 // Process is done running for now.
                 // It should have changed its p->state before coming back.
+                // 表示当前已经切换到了 调度器线程当中 未免引起混乱
                 c->proc = 0;
             }
+            // 释放在yield的时候就上的锁
             release(&p->lock);
         }
     }
@@ -493,6 +501,7 @@ void scheduler(void) {
 // be proc->intena and proc->noff, but that would
 // break in the few places where a lock is held but
 // there's no process.
+// 线程进行上下文的时候执行函数 改变函数当前的运行状态
 void sched(void) {
     int intena;
     struct proc* p = myproc();
@@ -506,12 +515,16 @@ void sched(void) {
     if (intr_get())
         panic("sched interruptible");
 
+    // 关闭中断 在线程切换时已经切换走的时候 该线程不允许中断
     intena = mycpu()->intena;
+    // 切换调度器线程 见swich.s 函数执行完这里就会直接跳过去运行了调度器线程
     swtch(&p->context, &mycpu()->context);
+    // 运行到最后一行代码的时机，是已经下一次轮到当前线程调度了。此时才允许中断 打开中断
     mycpu()->intena = intena;
 }
 
 // Give up the CPU for one scheduling round.
+// 主动让出线程 加线程颗粒度锁
 void yield(void) {
     struct proc* p = myproc();
     acquire(&p->lock);
@@ -522,6 +535,7 @@ void yield(void) {
 
 // A fork child's very first scheduling by scheduler()
 // will swtch to forkret.
+// 调度器线程的设置
 void forkret(void) {
     static int first = 1;
 
@@ -529,6 +543,7 @@ void forkret(void) {
     release(&myproc()->lock);
 
     if (first) {
+        // 初始化文件系统
         // File system initialization must be run in the context of a
         // regular process (e.g., because it calls sleep), and thus cannot
         // be run from main().

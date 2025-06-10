@@ -141,6 +141,34 @@ void usertrap(void) {
         }
     } else if ((which_dev = devintr()) != 0) {
         // ok
+    } else if (r_scause() == 13) {
+        // COW页面错误 在此分配新页面
+
+        uint64 err_vaddr = PGROUNDDOWN(r_stval());
+        // pagetable_t up_pte = p->pagetable;
+        pte_t* pte = walkpte(p->pagetable, err_vaddr);
+
+        if (*p->pagetable & PTE_C) {
+            uint64 err_paddr = PTE2PA((uint64)*pte);
+            if (err_paddr == 0) {
+                printf("usertrap : err_vaddr: %p\n", err_vaddr);
+                panic("usertrap: fail to walkaddr! \n");
+            }
+
+            // 分配新页面 并且分配PTE_W位
+            char* page = kalloc();
+            if (page == 0) {
+                // 没内存kill掉当前线程
+                printf("usertrap(): Fail to allocate physical page.\n");
+                p->killed = 1;
+            } else {
+                uvmunmap(p->pagetable, err_vaddr, PGSIZE, 1);
+                memmove((char*)page, (char*)err_paddr, PGSIZE);
+                uint64 flags = ((PTE_FLAGS((uint64)(*pte)) | PTE_W) & (~PTE_C));
+                *pte = PA2PTE((uint64)page) | flags;
+            }
+        }
+
     } else {
         printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
         printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

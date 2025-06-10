@@ -8,15 +8,18 @@
 #include "proc.h"
 #include "defs.h"
 
+// 初始化当前自旋锁的信息
 void initlock(struct spinlock* lk, char* name) {
     lk->name = name;
     lk->locked = 0;
     lk->cpu = 0;
 }
 
+// 获取当前锁
 // Acquire the lock.
 // Loops (spins) until the lock is acquired.
 void acquire(struct spinlock* lk) {
+    // 获取锁的时候 关闭中断
     push_off();  // disable interrupts to avoid deadlock.
     if (holding(lk))
         panic("acquire");
@@ -25,6 +28,7 @@ void acquire(struct spinlock* lk) {
     //   a5 = 1
     //   s1 = &lk->locked
     //   amoswap.w.aq a5, a5, (s1)
+    // 开始自旋 类似atom swap 直至成功获取到锁
     while (__sync_lock_test_and_set(&lk->locked, 1) != 0)
         ;
 
@@ -35,6 +39,7 @@ void acquire(struct spinlock* lk) {
     __sync_synchronize();
 
     // Record info about lock acquisition for holding() and debugging.
+    // 记录当前获得锁的是哪个核
     lk->cpu = mycpu();
 }
 
@@ -60,6 +65,7 @@ void release(struct spinlock* lk) {
     // On RISC-V, sync_lock_release turns into an atomic swap:
     //   s1 = &lk->locked
     //   amoswap.w zero, zero, (s1)
+    // 再次进行一个atom release本质上也是atom swap
     __sync_lock_release(&lk->locked);
 
     pop_off();

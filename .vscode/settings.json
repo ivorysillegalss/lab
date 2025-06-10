@@ -1,4 +1,9 @@
 {
     "clang-format.executable": "./.clang-format",
-    "makefile.configureOnOpen": false
+    "makefile.configureOnOpen": false,
+    "files.associations": {
+        "random": "c",
+        "cstdlib": "c",
+        "user.h": "c"
+    }
 }

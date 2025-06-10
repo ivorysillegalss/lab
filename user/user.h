@@ -1,6 +1,7 @@
 struct stat;
 struct rtcdate;
 struct sysinfo;
+// struct tcontext;
 
 // system calls
 // 对应sysproc.c等文件中的实现
