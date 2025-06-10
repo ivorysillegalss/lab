@@ -184,8 +184,10 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free) {
     for (a = va; a < va + npages * PGSIZE; a += PGSIZE) {
         if ((pte = walk(pagetable, a, 0)) == 0)
             panic("uvmunmap: walk");
-        if ((*pte & PTE_V) == 0)
+        if ((*pte & PTE_V) == 0) {
+            printf("va=%p pte=%p\n", a, *pte);
             panic("uvmunmap: not mapped");
+        }
         if (PTE_FLAGS(*pte) == PTE_V)
             panic("uvmunmap: not a leaf");
         if (do_free) {
@@ -419,18 +421,27 @@ void uvmclear(pagetable_t pagetable, uint64 va) {
 // src 内核复制的起始地址.
 // len 还需要操作的字节长度.
 int copyout(pagetable_t pagetable, uint64 dstva, char* src, uint64 len) {
-    uint64 n, va0, pa0;
+    uint64 n, va0;
+    // uint64 n, va0, pa0;
     // va0是目标虚拟地址dstva的页对齐地址
     // pa0是va0对应的物理地址
     // n是当前操作的字节数（每轮遍历）
     // len是还需要操作的字节数
 
+    if (dstva > MAXVA) {
+        return -1;
+    }
+
     while (len > 0) {
         // 获取页对齐地址
         va0 = PGROUNDDOWN(dstva);
-        // 虚拟地址映射到物理地址
-        pa0 = walkaddr(pagetable, va0);
-        if (pa0 == 0)
+        // 得到对应的pte
+        pte_t* pte = walkpte(pagetable, va0);
+        if (pte == 0) {
+            return -1;
+        }
+        uint64 pa = PTE2PA((uint64)(*pte));
+        if (pa == 0) {
             return -1;
         uint64 pte = walkaddr(pagetable, va0);
         if (pte & PTE_C) {
@@ -450,7 +461,7 @@ int copyout(pagetable_t pagetable, uint64 dstva, char* src, uint64 len) {
         if (n > len)
             n = len;
         // 复制
-        memmove((void*)(pa0 + (dstva - va0)), src, n);
+        memmove((void*)(pa + (dstva - va0)), src, n);
 
         // 更新遍历条件
         len -= n;
