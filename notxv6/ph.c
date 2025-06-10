@@ -8,14 +8,21 @@
 #define NBUCKET 5
 #define NKEYS 100000
 
+// 拉链法哈希表
 struct entry {
     int key;
     int value;
-    struct entry* next;
+    struct entry* next;  // 链表下一节点
 };
 struct entry* table[NBUCKET];
 int keys[NKEYS];
 int nthread = 1;
+
+// 一把大锁直接锁put
+// pthread_mutex_t lock;
+
+// 直接初始化 以桶为颗粒度
+pthread_mutex_t lock[NBUCKET] = {PTHREAD_MUTEX_INITIALIZER};
 
 double now() {
     struct timeval tv;
@@ -32,6 +39,7 @@ static void insert(int key, int value, struct entry** p, struct entry* n) {
 }
 
 static void put(int key, int value) {
+    // 哈希计算 决定放到哪个桶内
     int i = key % NBUCKET;
 
     // is the key already present?
@@ -45,7 +53,11 @@ static void put(int key, int value) {
         e->value = value;
     } else {
         // the new is new.
+        // 这里哈希计算之后 就知道锁到哪个桶里了
+        // 每个桶之间的数据是隔离的 所以就可以直接以这个桶为颗粒度上锁
+        pthread_mutex_lock(&lock[i]);
         insert(key, value, &table[i], table[i]);
+        pthread_mutex_unlock(&lock[i]);
     }
 }
 
@@ -66,7 +78,9 @@ static void* put_thread(void* xa) {
     int b = NKEYS / nthread;
 
     for (int i = 0; i < b; i++) {
+        // pthread_mutex_lock(&lock);
         put(keys[b * n + i], n);
+        // pthread_mutex_unlock(&lock);
     }
 
     return NULL;
@@ -86,6 +100,7 @@ static void* get_thread(void* xa) {
 }
 
 int main(int argc, char* argv[]) {
+    // pthread_mutex_init(&lock, NULL);
     pthread_t* tha;
     void* value;
     double t1, t0;
@@ -94,7 +109,10 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Usage: %s nthreads\n", argv[0]);
         exit(-1);
     }
+
+    // 线程数量
     nthread = atoi(argv[1]);
+    // 开辟空间
     tha = malloc(sizeof(pthread_t) * nthread);
     srandom(0);
     assert(NKEYS % nthread == 0);
@@ -106,6 +124,7 @@ int main(int argc, char* argv[]) {
     // first the puts
     //
     t0 = now();
+    // 启动线程启动put任务
     for (int i = 0; i < nthread; i++) {
         assert(pthread_create(&tha[i], NULL, put_thread, (void*)(long)i) == 0);
     }

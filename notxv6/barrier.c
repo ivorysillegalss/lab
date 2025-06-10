@@ -21,11 +21,25 @@ static void barrier_init(void) {
 }
 
 static void barrier() {
-    // YOUR CODE HERE
-    //
-    // Block until all threads have called barrier() and
-    // then increment bstate.round.
-    //
+
+    // 上锁防止被插入
+    pthread_mutex_lock(&bstate.barrier_mutex);
+
+    bstate.nthread++;
+    // 当此轮全部遍历完 唤醒所有线程 进入下一轮并且初始化状态
+    if (bstate.nthread == nthread) {
+        bstate.nthread = 0;
+        bstate.round++;
+        pthread_cond_broadcast(&bstate.barrier_cond);
+    } else {
+        // 这个线程完事了 但是没遍历完 所以此时需要等待其他线程
+        // 放下书中的锁 把资源给别的人用 （虽然这里没的资源）
+        // 注意 调用wait的时候 手中必须持有锁
+        // 所以这里的分支就可以 怎么都能放下所
+        pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
+    }
+
+    pthread_mutex_unlock(&bstate.barrier_mutex);
 }
 
 static void* thread(void* xa) {
