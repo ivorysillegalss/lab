@@ -19,124 +19,116 @@ volatile int panicked = 0;
 
 // lock to avoid interleaving concurrent printf's.
 static struct {
-    struct spinlock lock;
-    int locking;
+  struct spinlock lock;
+  int locking;
 } pr;
 
 static char digits[] = "0123456789abcdef";
 
-static void printint(int xx, int base, int sign) {
-    char buf[16];
-    int i;
-    uint x;
+static void
+printint(int xx, int base, int sign)
+{
+  char buf[16];
+  int i;
+  uint x;
 
-    if (sign && (sign = xx < 0))
-        x = -xx;
-    else
-        x = xx;
+  if(sign && (sign = xx < 0))
+    x = -xx;
+  else
+    x = xx;
 
-    i = 0;
-    do {
-        buf[i++] = digits[x % base];
-    } while ((x /= base) != 0);
+  i = 0;
+  do {
+    buf[i++] = digits[x % base];
+  } while((x /= base) != 0);
 
-    if (sign)
-        buf[i++] = '-';
+  if(sign)
+    buf[i++] = '-';
 
-    while (--i >= 0)
-        consputc(buf[i]);
+  while(--i >= 0)
+    consputc(buf[i]);
 }
 
-static void printptr(uint64 x) {
-    int i;
-    consputc('0');
-    consputc('x');
-    for (i = 0; i < (sizeof(uint64) * 2); i++, x <<= 4)
-        consputc(digits[x >> (sizeof(uint64) * 8 - 4)]);
+static void
+printptr(uint64 x)
+{
+  int i;
+  consputc('0');
+  consputc('x');
+  for (i = 0; i < (sizeof(uint64) * 2); i++, x <<= 4)
+    consputc(digits[x >> (sizeof(uint64) * 8 - 4)]);
 }
 
 // Print to the console. only understands %d, %x, %p, %s.
-void printf(char* fmt, ...) {
-    va_list ap;
-    int i, c, locking;
-    char* s;
+void
+printf(char *fmt, ...)
+{
+  va_list ap;
+  int i, c, locking;
+  char *s;
 
-    locking = pr.locking;
-    if (locking)
-        acquire(&pr.lock);
+  locking = pr.locking;
+  if(locking)
+    acquire(&pr.lock);
 
-    if (fmt == 0)
-        panic("null fmt");
+  if (fmt == 0)
+    panic("null fmt");
 
-    va_start(ap, fmt);
-    for (i = 0; (c = fmt[i] & 0xff) != 0; i++) {
-        if (c != '%') {
-            consputc(c);
-            continue;
-        }
-        c = fmt[++i] & 0xff;
-        if (c == 0)
-            break;
-        switch (c) {
-            case 'd':
-                printint(va_arg(ap, int), 10, 1);
-                break;
-            case 'x':
-                printint(va_arg(ap, int), 16, 1);
-                break;
-            case 'p':
-                printptr(va_arg(ap, uint64));
-                break;
-            case 's':
-                if ((s = va_arg(ap, char*)) == 0)
-                    s = "(null)";
-                for (; *s; s++)
-                    consputc(*s);
-                break;
-            case '%':
-                consputc('%');
-                break;
-            default:
-                // Print unknown % sequence to draw attention.
-                consputc('%');
-                consputc(c);
-                break;
-        }
+  va_start(ap, fmt);
+  for(i = 0; (c = fmt[i] & 0xff) != 0; i++){
+    if(c != '%'){
+      consputc(c);
+      continue;
     }
-
-    if (locking)
-        release(&pr.lock);
-}
-
-void panic(char* s) {
-    pr.locking = 0;
-    printf("panic: ");
-    printf(s);
-    printf("\n");
-    panicked = 1;  // freeze uart output from other CPUs
-    for (;;)
-        ;
-}
-
-void printfinit(void) {
-    initlock(&pr.lock, "pr");
-    pr.locking = 1;
-}
-
-void backtrace(void) {
-    printf("backtrace:\n");
-    
-    // 获取当前栈内的fp （上一个调用者栈内的栈指针）
-    uint64 fp = r_fp();
-    uint64 bottom = PGROUNDDOWN(fp);
-    uint64 top = PGROUNDUP(fp);
-
-    //超出当前栈默认遍历完毕
-    // 具体可参见xv6中的栈结构 fp中存储的是上一个调用者的指针位置 类比链表树
-    // 所以可以直接通过这个fp索引并且打印调用链
-    while (fp >= bottom && fp < top) {
-        printf("%p\n",  *(uint64*)(fp - 8));
-        fp = *(uint64*)(fp - 16);
+    c = fmt[++i] & 0xff;
+    if(c == 0)
+      break;
+    switch(c){
+    case 'd':
+      printint(va_arg(ap, int), 10, 1);
+      break;
+    case 'x':
+      printint(va_arg(ap, int), 16, 1);
+      break;
+    case 'p':
+      printptr(va_arg(ap, uint64));
+      break;
+    case 's':
+      if((s = va_arg(ap, char*)) == 0)
+        s = "(null)";
+      for(; *s; s++)
+        consputc(*s);
+      break;
+    case '%':
+      consputc('%');
+      break;
+    default:
+      // Print unknown % sequence to draw attention.
+      consputc('%');
+      consputc(c);
+      break;
     }
-    return;
+  }
+
+  if(locking)
+    release(&pr.lock);
+}
+
+void
+panic(char *s)
+{
+  pr.locking = 0;
+  printf("panic: ");
+  printf(s);
+  printf("\n");
+  panicked = 1; // freeze uart output from other CPUs
+  for(;;)
+    ;
+}
+
+void
+printfinit(void)
+{
+  initlock(&pr.lock, "pr");
+  pr.locking = 1;
 }

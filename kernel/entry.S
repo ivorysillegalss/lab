@@ -17,8 +17,5 @@ _entry:
         add sp, sp, a0
 	# jump to start() in start.c
         call start
-
-        # ifi work normally with no panic
-        # program will not execute in spin
 spin:
         j spin

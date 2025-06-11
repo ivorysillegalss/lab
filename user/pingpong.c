@@ -2,64 +2,51 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 
-// 两个进程 父进程先write到 子进程 ping
-//         子进程后write到 父进程 pong
+#define N 5
+char buf[N];
 
-int main(int argc, char* argv[]) {
-    int p[2];    //as chan
-    int buf[2];  //msg buffer
+void
+pong(int *parent_to_child, int *child_to_parent) {
+  if (read(parent_to_child[0], buf, N) < 0) {
+    printf("read failed\n");
+  }
+  printf("%d: received %s\n", getpid(), buf);
+  if (write(child_to_parent[1], "pong", 4) != 4) {
+    printf("write failed\n");
+  }
+}
 
-    pipe(p);
+void
+ping(int *parent_to_child, int *child_to_parent) {
+  
+  if (write(parent_to_child[1], "ping", 4) != 4) {
+    printf("write failed\n");
+  }
+  if (read(child_to_parent[0], buf, N) < 0) {
+    printf("read failed\n");
+  }
+  printf("%d: received %s\n", getpid(), buf);
+}
 
-    char* pingMsg = "i";
-    char* pongMsg = "o";
+int
+main(int argc, char *argv[])
+{
+  int parent_to_child[2];
+  int child_to_parent[2];
 
-    if (fork() == 0) {
-        // 子进程
-        int rr;
-        rr = read(p[0], buf, 1);
-        if (rr != 1) {
-            fprintf(2, "child process read error\n");
-            exit(1);
-        }
+  int pid;
 
-        close(p[0]);
-        printf("%d: received ping\n");
-
-        int wr;
-        wr = write(p[1], pongMsg, 1);
-        if (wr != 1) {
-            fprintf(2, "child process write error\n");
-            exit(1);
-        }
-
-        close(p[1]);
-        exit(0);
-
-    } else {
-        // 父进程
-        int pwr;
-        pwr = write(p[1], pingMsg, 1);
-        if (pwr != 1) {
-            fprintf(2, "parent process write error\n");
-            exit(1);
-        }
-
-        close(p[1]);
-
-        wait(0);
-        // wait系统调用下 等待某个线程的任一子进程结束任务即返回
-        // 其中填入的形参本应是一个地址 这个地址将会记录子进程退出时状态
-        // 这里填入了0 相当于填入了NULL 不记录子进程的退出状态
-
-        int prr;
-        prr = read(p[0], buf, 1);
-        if (prr != 1) {
-            fprintf(2, "parent process read error\n");
-        }
-
-        printf("%d: received pong\n", getpid());
-        close(p[0]);
-        exit(0);
-    }
+  if (pipe(parent_to_child) < 0 || pipe(child_to_parent) < 0) {
+    printf("pipe failed\n");
+  }
+  if ((pid = fork()) < 0) {
+    printf("fork failed\n");
+  }
+  if (pid == 0) {
+    pong(parent_to_child, child_to_parent);
+  } else {
+    ping(parent_to_child, child_to_parent);
+  }
+  
+  exit(0);
 }
