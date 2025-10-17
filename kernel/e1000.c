@@ -27,17 +27,19 @@ struct spinlock e1000_lock;
 void e1000_init(uint32* xregs) {
     int i;
 
+    // 初始化对应位置的锁
     initlock(&e1000_lock, "e1000");
 
     regs = xregs;
 
     // Reset the device
-    regs[E1000_IMS] = 0;  // disable interrupts
-    regs[E1000_CTL] |= E1000_CTL_RST;
-    regs[E1000_IMS] = 0;  // redisable interrupts
-    __sync_synchronize();
+    // 重置初始化设备
+    regs[E1000_IMS] = 0;               // disable interrupts 禁用中断
+    regs[E1000_CTL] |= E1000_CTL_RST;  // 设备复位
+    regs[E1000_IMS] = 0;               // redisable interrupts 再次禁用中断
+    __sync_synchronize();              // 内存屏障
 
-    // [E1000 14.5] Transmit initialization
+    // [E1000 14.5] Transmit initialization 发送初始化
     memset(tx_ring, 0, sizeof(tx_ring));
     for (i = 0; i < TX_RING_SIZE; i++) {
         tx_ring[i].status = E1000_TXD_STAT_DD;
@@ -49,7 +51,7 @@ void e1000_init(uint32* xregs) {
     regs[E1000_TDLEN] = sizeof(tx_ring);
     regs[E1000_TDH] = regs[E1000_TDT] = 0;
 
-    // [E1000 14.4] Receive initialization
+    // [E1000 14.4] Receive initialization 接受初始化
     memset(rx_ring, 0, sizeof(rx_ring));
     for (i = 0; i < RX_RING_SIZE; i++) {
         rx_mbufs[i] = mbufalloc(0);
@@ -64,14 +66,14 @@ void e1000_init(uint32* xregs) {
     regs[E1000_RDT] = RX_RING_SIZE - 1;
     regs[E1000_RDLEN] = sizeof(rx_ring);
 
-    // filter by qemu's MAC address, 52:54:00:12:34:56
+    // filter by qemu's MAC address, 52:54:00:12:34:56 设置mac地址和过滤规则
     regs[E1000_RA] = 0x12005452;
     regs[E1000_RA + 1] = 0x5634 | (1 << 31);
     // multicast table
     for (int i = 0; i < 4096 / 32; i++)
         regs[E1000_MTA + i] = 0;
 
-    // transmitter control bits.
+    // transmitter control bits. 设置发送控制参数
     regs[E1000_TCTL] = E1000_TCTL_EN |                  // enable
                        E1000_TCTL_PSP |                 // pad short packets
                        (0x10 << E1000_TCTL_CT_SHIFT) |  // collision stuff
@@ -84,7 +86,7 @@ void e1000_init(uint32* xregs) {
                        E1000_RCTL_SZ_2048 |  // 2048-byte rx buffers
                        E1000_RCTL_SECRC;     // strip CRC
 
-    // ask e1000 for receive interrupts.
+    // ask e1000 for receive interrupts.设置为可以接受中断
     regs[E1000_RDTR] = 0;  // interrupt after every received packet (no timer)
     regs[E1000_RADV] = 0;  // interrupt after every packet (no timer)
     regs[E1000_IMS] = (1 << 7);  // RXDW -- Receiver Descriptor Write Back
@@ -92,14 +94,36 @@ void e1000_init(uint32* xregs) {
 
 int e1000_transmit(struct mbuf* m) {
     //
-    // Your code here.
+    // 包的发送过程
     //
     // the mbuf contains an ethernet frame; program it into
     // the TX descriptor ring so that the e1000 sends it. Stash
     // a pointer so that it can be freed after sending.
     //
 
-    return 0;
+    acquire(&e1000_lock);
+    uint32 ind = regs[E1000_TDT];
+    struct tx_desc* desc = &tx_ring[ind];
+
+    // 如果该 buffer 中的数据还未传输完，则代表我们已经将环形 buffer 列表全部用完，缓冲区不足，返回错误
+    if (!(desc->status & E1000_TXD_STAT_DD)) {
+        release(&e1000_lock);
+        return -1;
+    }
+
+    if (tx_mbufs[ind]) {
+        mbuffree(tx_mbufs[ind]);
+        tx_mbufs[ind] = 0;
+    }
+
+    // 将要发送的 mbuf 的内存地址与长度填写到发送描述符中
+    desc->addr = (uint64)m->head;
+    desc->length = m->len;
+
+    // 设置参数，EOP 表示该 buffer 含有一个完整的 packet
+    // RS 告诉网卡在发送完成后，设置 status 中的 E1000_TXD_STAT_DD 位，表示发送完成。
+    desc->cmd = E1000_TXD_CMD_EOP | E1000_TXD_CMD_RS
+    // 保留
 }
 
 static void e1000_recv(void) {
